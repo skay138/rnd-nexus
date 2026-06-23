@@ -8,7 +8,7 @@ from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 from api.schemas import QueryRequest
 from common.config.query_config import QueryConfig, RequestConfig
@@ -152,16 +152,45 @@ async def _stream_events(
     initial_state: dict[str, Any],
     config: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    seen_tool_ids: set[str]    = set()
-    final_content              = ""
-    last_tool_results: dict    = {}
-    prev_tool_results: dict    = {}
+    last_tool_results: dict   = {}
+    prev_tool_results: dict   = {}
+    last_iteration_count: int = 0
 
     try:
-        async for event in graph.astream(initial_state, config, stream_mode="values"):
-            messages     = event.get("messages", [])
-            tool_results = event.get("tool_results", {})
+        async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
+            mode, data = item
 
+            # ── 실시간 토큰 (generate 노드에서만) ─────────────────────────────
+            if mode == "messages":
+                msg_chunk, metadata = data
+                if metadata.get("langgraph_node") == "generate":
+                    content = getattr(msg_chunk, "content", "")
+                    if content:
+                        yield json.dumps({"type": "token", "content": content})
+                continue
+
+            # ── 노드 완료 후 상태 스냅샷 (values) ─────────────────────────────
+            messages        = data.get("messages", [])
+            tool_results    = data.get("tool_results", {})
+            iteration_count = data.get("iteration_count", 0)
+            pending_tasks   = data.get("pending_tasks", [])
+
+            # 오케스트레이터 라운드 이벤트
+            if iteration_count > last_iteration_count:
+                last_iteration_count = iteration_count
+                orch_msg = next(
+                    (m for m in reversed(messages) if getattr(m, "name", None) == "orchestrator"),
+                    None,
+                )
+                if orch_msg:
+                    yield json.dumps({
+                        "type":      "orchestrator",
+                        "round":     iteration_count,
+                        "reasoning": str(orch_msg.content)[:400],
+                        "tasks":     pending_tasks,
+                    })
+
+            # 병렬 실행 결과 (parallel_executor)
             if tool_results:
                 for tool_name, results in tool_results.items():
                     prev_count = len(prev_tool_results.get(tool_name, []))
@@ -170,28 +199,6 @@ async def _stream_events(
                         yield json.dumps({"type": "tool_result", "tool": tool_name, "summary": summary})
                 last_tool_results = tool_results
                 prev_tool_results = {k: list(v) for k, v in tool_results.items()}
-
-            if not messages:
-                continue
-            last_msg = messages[-1]
-
-            # Tool call 알림 (AIMessage with tool_calls)
-            if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
-                for tc in last_msg.tool_calls:
-                    tc_id = tc.get("id", "")
-                    if tc_id not in seen_tool_ids:
-                        seen_tool_ids.add(tc_id)
-                        yield json.dumps({"type": "tool_call", "tool": tc.get("name", ""), "args": tc.get("args", {})})
-
-            # 최종 답변 토큰 스트리밍 (generate 노드 출력)
-            if isinstance(last_msg, AIMessage) and getattr(last_msg, "name", None) == "final_answer" and last_msg.content:
-                content = str(last_msg.content)
-                if content != final_content:
-                    new_text = content[len(final_content):]
-                    chunk_size = 15
-                    for i in range(0, len(new_text), chunk_size):
-                        yield json.dumps({"type": "token", "content": new_text[i:i + chunk_size]})
-                    final_content = content
 
     except Exception as e:
         logger.exception("agent_query 스트리밍 오류")

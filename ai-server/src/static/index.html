@@ -115,28 +115,50 @@
     }
     @keyframes blink { 50% { opacity: 0; } }
 
-    .plan-box {
-      margin-top: 0.25rem;
+    .rounds-box { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.3rem; }
+
+    .round-item {
       background: #0d1117;
       border: 1px solid #2d3148;
       border-left: 3px solid #7c3aed;
       border-radius: 6px;
-      padding: 0.6rem 0.9rem;
-      font-size: 0.78rem;
-      color: #a5b4fc;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.76rem;
     }
-    .plan-title {
+    .round-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+    }
+    .round-badge {
+      background: #7c3aed22;
+      border: 1px solid #7c3aed55;
+      border-radius: 4px;
+      color: #a78bfa;
+      font-size: 0.68rem;
       font-weight: 700;
-      color: #7c3aed;
-      margin-bottom: 0.4rem;
-      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      padding: 0.1rem 0.45rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
     }
-    .plan-step { margin-bottom: 0.2rem; }
-    .plan-step::before { content: "→ "; color: #6366f1; }
-
-    .tool-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+    .round-reasoning {
+      color: #64748b;
+      font-size: 0.74rem;
+      line-height: 1.5;
+      margin-bottom: 0.35rem;
+    }
+    .round-tasks {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .parallel-label {
+      color: #f59e0b;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
     .chip {
       background: #1e2035;
       border: 1px solid #3d3f6a;
@@ -144,6 +166,25 @@
       color: #a5b4fc;
       font-size: 0.72rem;
       padding: 0.15rem 0.6rem;
+    }
+    .chip.done {
+      border-color: #065f46;
+      color: #6ee7b7;
+      background: #064e3b22;
+    }
+    .round-results {
+      margin-top: 0.3rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+    .result-pill {
+      background: #0f291e;
+      border: 1px solid #065f46;
+      border-radius: 4px;
+      color: #6ee7b7;
+      font-size: 0.68rem;
+      padding: 0.1rem 0.45rem;
     }
 
     .example-chips {
@@ -277,9 +318,8 @@
       padding-top: 0.5rem;
       border-top: 1px solid #2d3148;
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 0.3rem;
-      align-items: center;
     }
     .ref-label {
       font-size: 0.68rem;
@@ -287,7 +327,11 @@
       color: #4a5568;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      margin-right: 0.2rem;
+    }
+    .ref-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
     }
     .ref-item {
       background: #12142080;
@@ -469,35 +513,62 @@
       div.className = "msg assistant";
       div.innerHTML =
         '<div class="msg-role">R&amp;D Nexus</div>' +
-        '<div class="plan-box" id="plan-box" style="display:none;">' +
-          '<div class="plan-title">실행 계획</div>' +
-          '<div id="plan-steps"></div>' +
-        '</div>' +
-        '<div class="tool-chips" id="chips"></div>' +
+        '<div class="rounds-box" id="rounds-box"></div>' +
         '<div class="msg-body streaming" id="answer-body"></div>' +
         '<div class="ref-block" id="ref-block" style="display:none;"></div>' +
         '<details class="process-log" id="process-log" style="display:none;">' +
-          '<summary>처리 과정</summary>' +
+          '<summary>처리 과정 상세</summary>' +
           '<div class="process-content" id="process-content"></div>' +
         '</details>';
       chat.appendChild(div);
       scrollChat();
       return {
         body:           div.querySelector("#answer-body"),
-        chips:          div.querySelector("#chips"),
-        planBox:        div.querySelector("#plan-box"),
-        planSteps:      div.querySelector("#plan-steps"),
+        roundsBox:      div.querySelector("#rounds-box"),
         refBlock:       div.querySelector("#ref-block"),
         processLog:     div.querySelector("#process-log"),
         processContent: div.querySelector("#process-content"),
       };
     }
 
-    function addToolChip(chips, toolName) {
-      var chip = document.createElement("span");
-      chip.className   = "chip";
-      chip.textContent = "⚙ " + toolName;
-      chips.appendChild(chip);
+    var currentRound = 0;
+
+    function addRound(roundsBox, round, reasoning, tasks) {
+      currentRound = round;
+      var tasksHtml = "";
+      if (tasks && tasks.length > 0) {
+        tasksHtml =
+          '<div class="round-tasks" id="round-tasks-' + round + '">' +
+            '<span class="parallel-label">⚡ 병렬 실행</span>' +
+            tasks.map(function(t) {
+              return '<span class="chip" id="chip-' + round + '-' + escHtml(t.tool) + '">' + escHtml(t.tool) + '</span>';
+            }).join("") +
+          '</div>' +
+          '<div class="round-results" id="round-results-' + round + '"></div>';
+      }
+      var div = document.createElement("div");
+      div.className = "round-item";
+      div.id = "round-" + round;
+      div.innerHTML =
+        '<div class="round-header">' +
+          '<span class="round-badge">라운드 ' + round + '</span>' +
+          (tasks.length === 0 ? '<span style="color:#6ee7b7;font-size:0.7rem;">✓ 수집 완료</span>' : '') +
+        '</div>' +
+        '<div class="round-reasoning">' + escHtml(reasoning) + '</div>' +
+        tasksHtml;
+      roundsBox.appendChild(div);
+    }
+
+    function markToolDone(round, toolName, summary) {
+      var chip = document.getElementById("chip-" + round + "-" + toolName);
+      if (chip) chip.className = "chip done";
+      var results = document.getElementById("round-results-" + round);
+      if (results) {
+        var pill = document.createElement("span");
+        pill.className   = "result-pill";
+        pill.textContent = toolName + ": " + summary;
+        results.appendChild(pill);
+      }
     }
 
     function scrollChat() {
@@ -526,13 +597,12 @@
       appendUserMessage(queryText);
       var els = createAssistantMessage();
       var answerBody     = els.body;
-      var chips          = els.chips;
-      var planBox        = els.planBox;
-      var planSteps      = els.planSteps;
+      var roundsBox      = els.roundsBox;
       var refBlock       = els.refBlock;
       var processLog     = els.processLog;
       var processContent = els.processContent;
       var processLines   = [];
+      currentRound       = 0;
 
       var config = {
         generate_model:  document.getElementById("conf-model").value  || undefined,
@@ -563,29 +633,17 @@
             if (!line.startsWith("data: ")) continue;
             try {
               var payload = JSON.parse(line.slice(6));
-              if (payload.type === "plan") {
-                planBox.style.display = "block";
-                planSteps.innerHTML   = payload.steps
-                  .map(function(s) { return '<div class="plan-step">' + escHtml(s) + '</div>'; })
-                  .join("");
-                processLines.push("[ 계획 ]");
-                payload.steps.forEach(function(s) { processLines.push("  → " + s); });
-                scrollChat();
-              } else if (payload.type === "tool_call") {
-                addToolChip(chips, payload.tool);
-                var argsStr = "";
-                if (payload.args && Object.keys(payload.args).length > 0) {
-                  argsStr = "(" + Object.entries(payload.args).map(function(kv) {
-                    var v = typeof kv[1] === "string"
-                      ? '"' + kv[1].substring(0, 30) + (kv[1].length > 30 ? "…" : "") + '"'
-                      : JSON.stringify(kv[1]).substring(0, 40);
-                    return kv[0] + "=" + v;
-                  }).join(", ") + ")";
-                }
-                processLines.push("⚙ " + payload.tool + argsStr);
+              if (payload.type === "orchestrator") {
+                addRound(roundsBox, payload.round, payload.reasoning, payload.tasks || []);
+                processLines.push("[ 라운드 " + payload.round + " ]");
+                processLines.push("  reasoning: " + payload.reasoning.substring(0, 100));
+                (payload.tasks || []).forEach(function(t) {
+                  processLines.push("  ⚡ " + t.tool + " " + JSON.stringify(t.args).substring(0, 60));
+                });
                 scrollChat();
               } else if (payload.type === "tool_result") {
-                processLines.push("  └→ " + payload.summary);
+                markToolDone(currentRound, payload.tool, payload.summary);
+                processLines.push("  └→ [" + payload.tool + "] " + payload.summary);
                 processContent.textContent = processLines.join("\n");
                 scrollChat();
               } else if (payload.type === "token") {
@@ -595,11 +653,13 @@
               } else if (payload.type === "done") {
                 if (payload.references && payload.references.length > 0) {
                   refBlock.style.display = "flex";
-                  refBlock.innerHTML = '<span class="ref-label">출처</span>' +
+                  refBlock.innerHTML = '<span class=”ref-label”>출처</span>' +
+                    '<div class=”ref-items”>' +
                     payload.references.map(function(r) {
-                      var title = r.title ? '“' + escHtml(r.title.substring(0, 35)) + (r.title.length > 35 ? '…' : '') + '” ' : '';
-                      return '<span class="ref-item">[' + r.num + '] ' + escHtml(r.type) + ' ' + title + '(' + escHtml(r.id) + ')</span>';
-                    }).join("");
+                      var title = r.title ? '”' + escHtml(r.title.substring(0, 35)) + (r.title.length > 35 ? '…' : '') + '” ' : '';
+                      return '<span class=”ref-item”>[' + r.num + '] ' + escHtml(r.type) + ' ' + title + '(' + escHtml(r.id) + ')</span>';
+                    }).join(“”) +
+                    '</div>';
                 }
                 if (processLines.length > 0) {
                   processLog.style.display = "block";

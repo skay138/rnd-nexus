@@ -65,7 +65,7 @@ def _dedup_tool_results(tool_results: dict) -> dict:
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     model = config.get("configurable", {}).get("generate_model", settings.rnd_model_generate)
-    llm = ChatOllama(model=model, base_url=settings.ollama_base_url)
+    llm = ChatOllama(model=model, base_url=settings.ollama_base_url, streaming=True)
 
     # 도구 결과 취합 — ERROR 제외, 엔티티 ID 기준 중복 제거
     raw_results = state.get("tool_results", {})
