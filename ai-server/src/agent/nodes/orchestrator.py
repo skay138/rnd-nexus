@@ -24,10 +24,10 @@ class OrchestratorPlan(BaseModel):
 
 _STRATEGY = """
 <strategy>
-1단계 발견: semantic_search 또는 semantic_graph_search로 관련 ID 획득
-2단계 상세: 필요한 엔티티만 get_entities로 상세 조회 (전체 조회 불필요)
-3단계 관계: 연구자·논문 관계가 필요할 때 graph 도구 사용
-→ 이미 충분한 데이터가 있으면 tasks를 비워 수집 완료를 신호하세요
+- 발견 먼저: semantic_search / semantic_graph_search로 관련 ID를 얻은 뒤, get_entities로 상세 조회 (ID 없이 get_entities 호출 금지)
+- 입력이 이미 확보된 독립 태스크는 같은 라운드에 묶어 병렬 실행 (예: semantic_search 여러 쿼리, 또는 이전 라운드 ID/name을 활용하는 get_entities + get_researcher_network)
+- 의존 태스크는 순서 보장 (semantic_search → get_entities 는 반드시 다른 라운드)
+- 이미 충분한 데이터가 있으면 tasks=[]를 반환해 수집을 종료하세요
 </strategy>
 
 <follow_up_rule>
