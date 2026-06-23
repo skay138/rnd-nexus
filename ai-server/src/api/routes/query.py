@@ -139,9 +139,10 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         "recursion_limit": 50,
     }
     initial_state = {
-        "messages":       [HumanMessage(content=body.query)],
+        "messages":        [HumanMessage(content=body.query)],
         "iteration_count": 0,
         "tool_results":    {},
+        "executed_tasks":  [],
     }
 
     return EventSourceResponse(_stream_events(graph, initial_state, lg_config))

@@ -22,28 +22,7 @@ class OrchestratorPlan(BaseModel):
     tasks: list[ToolTask]     = Field(description="병렬 실행할 태스크 목록. 데이터 수집이 완료됐으면 빈 리스트")
 
 
-_TOOL_REFERENCE = """
-<available_tools>
-발견 (RAG — 항상 먼저 사용):
-  semantic_search(query, node_type?, top_k?)
-    - 자연어로 관련 엔티티 탐색. node_type: Researcher|Paper|Patent|Technology|Project (빈값=전체)
-    - 반환: [{id, node_type, name, score}, ...]  ← id를 get_entities에 전달
-
-  semantic_graph_search(concept, entry_type?, hops?, top_k?)
-    - 벡터 탐색 후 그래프 관계(협업·인용·사용)로 확장
-    - 반환: [{id, node_type, name, score}, ...]
-
-상세 조회 (DB — 발견 후 필요 시):
-  get_entities(entity_type, ids)
-    - semantic_search/graph로 얻은 ID로 DB 상세 정보 조회
-    - entity_type: Researcher|Paper|Patent|Technology|Project
-
-관계 탐색 (Neo4j):
-  get_researcher_network(researcher_name)  - 연구자 협업·논문·특허 네트워크
-  get_citation_graph(paper_title, depth?)  - 논문 인용 그래프
-  run_graph_query(cypher)                  - READ 전용 Cypher 직접 실행
-</available_tools>
-
+_STRATEGY = """
 <strategy>
 1단계 발견: semantic_search 또는 semantic_graph_search로 관련 ID 획득
 2단계 상세: 필요한 엔티티만 get_entities로 상세 조회 (전체 조회 불필요)
@@ -69,9 +48,21 @@ get_entities 호출 필요:
 """
 
 
+def _build_tool_reference(tools_by_name: dict) -> str:
+    lines = []
+    for name, tool in tools_by_name.items():
+        desc = (getattr(tool, "description", "") or "").strip()
+        first_line = desc.splitlines()[0] if desc else ""
+        lines.append(f"  {name}: {first_line}")
+    tool_list = "\n".join(lines)
+    return f"<available_tools>\n{tool_list}\n</available_tools>"
+
+
 async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
-    max_iterations: int = config.get("configurable", {}).get("max_replan", 3)
+    configurable = config.get("configurable", {})
+    max_iterations: int = configurable.get("max_replan", 3)
+    tools_by_name: dict = configurable.get("tools_by_name", {})
     iteration_count: int = state.get("iteration_count", 0)
 
     tool_results = state.get("tool_results", {})
@@ -86,21 +77,29 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
     remaining = max_iterations - iteration_count
 
-    system_prompt = f"""당신은 R&D 데이터 수집 오케스트레이터입니다.
-사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집 계획을 세우세요.
+    tool_reference = _build_tool_reference(tools_by_name)
+
+    system_prompt = f"""당신은 R&D 데이터 수집 오케스트레이터입니다. reasoning은 한국어로 작성하세요.
+사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집하고, 완료되면 tasks=[]를 반환하세요.
 당신은 도구를 직접 실행하지 않습니다 — tasks 목록을 반환하면 워커가 병렬로 실행합니다.
 
-{_TOOL_REFERENCE}
+{tool_reference}
+{_STRATEGY}
 
-<수집 현황>
+<collection_status>
 {collected}
-</수집 현황>
+</collection_status>
 
-<제약>
+<history_guide>
+대화 히스토리에서 이전 라운드의 [계획한 태스크] 항목을 확인하세요.
+동일한 도구+인수 조합은 절대 반복하지 마세요.
+이미 수집한 데이터로 답할 수 있거나, 새로운 검색 전략이 없다면 즉시 tasks=[]를 반환하세요.
+</history_guide>
+
+<constraints>
 - 남은 수집 라운드: {remaining}회 (0이면 반드시 tasks=[] 반환)
-- 이미 수집된 도구와 동일한 쿼리로 중복 실행 금지
 - 한 라운드에 병렬 실행 가능한 독립 태스크를 최대한 묶어서 반환하세요
-</제약>"""
+</constraints>"""
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
@@ -121,11 +120,17 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         tasks = []
         reasoning = "오류로 인해 수집 종료"
 
+    if tasks:
+        task_lines = "\n".join(f"  - {t['tool']}({t.get('args', {})})" for t in tasks)
+        msg_content = f"{reasoning}\n\n[계획한 태스크]\n{task_lines}"
+    else:
+        msg_content = f"{reasoning}\n\n[수집 완료 — 생성 단계 진행]"
+
     logger.debug("[orchestrator] iter=%d/%d tasks=%d reasoning=%s",
                  iteration_count + 1, max_iterations, len(tasks), reasoning[:120])
 
     return {
-        "messages":       [AIMessage(content=reasoning, name="orchestrator")],
-        "pending_tasks":  tasks,
+        "messages":        [AIMessage(content=msg_content, name="orchestrator")],
+        "pending_tasks":   tasks,
         "iteration_count": iteration_count + 1,
     }

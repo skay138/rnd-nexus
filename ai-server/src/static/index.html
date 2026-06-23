@@ -653,13 +653,12 @@
               } else if (payload.type === "done") {
                 if (payload.references && payload.references.length > 0) {
                   refBlock.style.display = "flex";
-                  refBlock.innerHTML = '<span class=”ref-label”>출처</span>' +
-                    '<div class=”ref-items”>' +
-                    payload.references.map(function(r) {
-                      var title = r.title ? '”' + escHtml(r.title.substring(0, 35)) + (r.title.length > 35 ? '…' : '') + '” ' : '';
-                      return '<span class=”ref-item”>[' + r.num + '] ' + escHtml(r.type) + ' ' + title + '(' + escHtml(r.id) + ')</span>';
-                    }).join(“”) +
-                    '</div>';
+                  var refItems = payload.references.map(function(r) { 
+                    var t = r.title ? r.title.substring(0, 35) + (r.title.length > 35 ? '…' : '') : '';
+                    var titlePart = t ? '&quot;' + escHtml(t) + '&quot; ' : ''; 
+                    return '<span class="ref-item">[' + r.num + '] ' + escHtml(r.type) + ' ' + titlePart + '(' + escHtml(r.id) + ')</span>';
+                  }).join('');
+                  refBlock.innerHTML = '<span class="ref-label">출처</span><div class="ref-items">' + refItems + '</div>';
                 }
                 if (processLines.length > 0) {
                   processLog.style.display = "block";

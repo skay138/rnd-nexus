@@ -87,10 +87,8 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         or (getattr(m, "type", None) == "ai" and getattr(m, "name", None) == "final_answer")
     ]
 
-    system_prompt = f"""당신은 반드시 한국어로만 답변해야 합니다.
-
-<role>
-당신은 R&D 전문 AI 어시스턴트입니다.
+    system_prompt = f"""<role>
+당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
 수집된 데이터를 바탕으로 사용자 질문에 직접 답하세요.
 </role>
 

@@ -9,3 +9,4 @@ class RDAgentState(TypedDict):
     tool_results: dict[str, list[str]]
     iteration_count: int
     pending_tasks: list[dict]   # orchestrator → parallel_executor
+    executed_tasks: list[dict]  # 실행된 {tool, args} 기록 (중복 차단용)
