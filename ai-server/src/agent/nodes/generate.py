@@ -1,6 +1,5 @@
-import ast as _ast
-import json as _json
 import logging
+import time
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_ollama import ChatOllama
@@ -11,90 +10,37 @@ from memory.compaction import should_compact, compact_messages
 logger = logging.getLogger(__name__)
 
 
-def _dedup_tool_results(tool_results: dict) -> dict:
-    """같은 도구의 여러 호출 결과를 엔티티 ID 기준으로 중복 제거."""
-    deduped: dict = {}
-    for name, results in tool_results.items():
-        seen_ids: set = set()
-        unique_texts: list = []
-        for result_str in results:
-            s = str(result_str)
-            if s.startswith("[ERROR]"):
-                continue
-            try:
-                raw = _ast.literal_eval(s)
-                if not isinstance(raw, list):
-                    unique_texts.append(s[:800])
-                    continue
-                new_items = []
-                for item in raw:
-                    if not isinstance(item, dict) or item.get("type") != "text":
-                        continue
-                    text = item.get("text", "")
-                    if not text:
-                        continue
-                    try:
-                        entries = _json.loads(text)
-                        if not isinstance(entries, list):
-                            entries = [entries]
-                        for entry in entries:
-                            if not isinstance(entry, dict):
-                                continue
-                            eid = (
-                                entry.get("paper_id") or entry.get("patent_id") or
-                                entry.get("researcher_id") or entry.get("technology_id") or
-                                entry.get("project_id") or
-                                str(entry.get("id") or entry.get("entity_id") or "")
-                            )
-                            if eid and eid not in seen_ids:
-                                seen_ids.add(eid)
-                                new_items.append(entry)
-                    except Exception:
-                        continue
-                if new_items:
-                    unique_texts.append(_json.dumps(new_items, ensure_ascii=False))
-                elif not new_items:
-                    unique_texts.append(s[:800])
-            except Exception:
-                unique_texts.append(s[:800])
-        if unique_texts:
-            deduped[name] = unique_texts
-    return deduped
-
-
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     model = config.get("configurable", {}).get("generate_model", settings.rnd_model_generate)
     llm = ChatOllama(model=model, base_url=settings.ollama_base_url, streaming=True)
 
-    # 도구 결과 취합 — ERROR 제외, 엔티티 ID 기준 중복 제거
-    raw_results = state.get("tool_results", {})
-    deduped = _dedup_tool_results(raw_results)
-    data_sections = []
-    for name, texts in deduped.items():
-        data_sections.append(f"[{name}]\n" + "\n---\n".join(texts))
-    data_block = "\n\n".join(data_sections) if data_sections else "(수집된 데이터 없음)"
+    messages = list(state["messages"])
+    approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
+    if should_compact(messages, approx_tokens):
+        messages = compact_messages(messages, llm)
 
-    all_messages = state["messages"]
-    approx_tokens = sum(len(str(m.content)) // 4 for m in all_messages)
-    if should_compact(all_messages, approx_tokens):
-        all_messages = compact_messages(all_messages, llm)
+    logger.debug(
+        "[generate] state.messages 전체 (%d개):\n%s",
+        len(messages),
+        "\n".join(
+            f"  [{i}] name={getattr(m, 'name', None) or getattr(m, 'type', '?')} "
+            f"len={len(str(m.content))}c  {str(m.content)[:200]}{'…' if len(str(m.content)) > 200 else ''}"
+            for i, m in enumerate(messages)
+        ),
+    )
 
-    # ToolMessage·중간 AIMessage 제외: 사용자 질문과 이전 최종 답변만 유지
-    clean_messages = [
-        m for m in all_messages
+    # 사용자 질문 + 오케스트레이터 계획 + 도구 결과 + 이전 최종 답변만 전달
+    relevant = [
+        m for m in messages
         if getattr(m, "type", None) == "human"
-        or (getattr(m, "type", None) == "ai" and getattr(m, "name", None) == "final_answer")
+        or getattr(m, "name", None) in ("orchestrator", "tool_results", "final_answer")
     ]
 
-    system_prompt = f"""<role>
+    system_prompt = """<role>
 당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
-수집된 데이터를 바탕으로 사용자 질문에 직접 답하세요.
+대화 히스토리의 [tool_results] 메시지에 수집된 데이터가 있습니다. 이를 바탕으로 사용자 질문에 직접 답하세요.
 </role>
-
-<collected_data>
-{data_block}
-</collected_data>
 
 <format_guide>
 질문 유형별 답변 형식:
@@ -135,10 +81,19 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
 </example>
 </examples>"""
 
-    messages_to_send = [SystemMessage(content=system_prompt)] + clean_messages
-    response = await llm.ainvoke(messages_to_send)
+    logger.debug(
+        "[generate] relevant_messages=%d\n%s",
+        len(relevant),
+        "\n".join(
+            f"  [{getattr(m, 'name', None) or getattr(m, 'type', '?')}] "
+            f"{str(m.content)[:300]}{'…' if len(str(m.content)) > 300 else ''}"
+            for m in relevant
+        ),
+    )
 
-    logger.debug("[generate] Final Response:\n%s", response.content)
-    return {
-        "messages": [AIMessage(content=response.content, name="final_answer")],
-    }
+    t0 = time.perf_counter()
+    response = await llm.ainvoke([SystemMessage(content=system_prompt)] + relevant)
+    elapsed = time.perf_counter() - t0
+
+    logger.debug("[generate] elapsed=%.2fs\n%s", elapsed, response.content)
+    return {"messages": [AIMessage(content=response.content, name="final_answer")]}

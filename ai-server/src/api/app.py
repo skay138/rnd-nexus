@@ -35,15 +35,15 @@ _LEVEL_CLR: dict[str, str] = {
 }
 # 노드별 색상 (logger name prefix → ANSI color)
 _NAME_CLR: list[tuple[str, str]] = [
-    ("agent.nodes.planner",    "\033[36m"),   # cyan
-    ("agent.nodes.llm_call",   "\033[34m"),   # blue
-    ("agent.nodes.tool_node",  "\033[33m"),   # yellow
-    ("agent.nodes.reflection", "\033[35m"),   # magenta
-    ("agent.nodes.generate",   "\033[32m"),   # green
-    ("agent.mcp_client",       "\033[90m"),   # dark gray
-    ("api",                    "\033[97m"),   # bright white
-    ("infrastructure",         "\033[96m"),   # bright cyan
-    ("mcp_server",             "\033[96m"),   # bright cyan
+    ("agent.nodes.orchestrator",     "\033[35m"),   # magenta
+    ("agent.nodes.parallel_executor","\033[33m"),   # yellow
+    ("agent.nodes.generate",         "\033[32m"),   # green
+    ("agent.mcp_client",             "\033[90m"),   # dark gray
+    ("memory.tool_cache",            "\033[34m"),   # blue
+    ("agent.graph",                  "\033[36m"),   # cyan
+    ("api",                          "\033[97m"),   # bright white
+    ("infrastructure",               "\033[96m"),   # bright cyan
+    ("mcp_server",                   "\033[96m"),   # bright cyan
 ]
 
 
@@ -115,9 +115,7 @@ async def lifespan(app: FastAPI):
     try:
         async with mcp_server_session() as session:
             app.state.mcp_connected = True
-            llm_with_tools, tools_by_name = await get_llm_and_tools(session)
-            app.state.llm_with_tools = llm_with_tools
-            app.state.tools_by_name  = tools_by_name
+            app.state.tools_by_name = await get_llm_and_tools(session)
 
             async with create_memory() as memory:
                 app.state.redis_connected = True

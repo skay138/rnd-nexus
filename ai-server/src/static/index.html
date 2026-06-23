@@ -541,7 +541,8 @@
           '<div class="round-tasks" id="round-tasks-' + round + '">' +
             '<span class="parallel-label">⚡ 병렬 실행</span>' +
             tasks.map(function(t) {
-              return '<span class="chip" id="chip-' + round + '-' + escHtml(t.tool) + '">' + escHtml(t.tool) + '</span>';
+              var chipLabel = t.label || t.description.substring(0, 35) + (t.description.length > 35 ? '…' : '');
+              return '<span class="chip" title="' + escHtml(t.description) + '">' + escHtml(chipLabel) + '</span>';
             }).join("") +
           '</div>' +
           '<div class="round-results" id="round-results-' + round + '"></div>';
@@ -559,9 +560,13 @@
       roundsBox.appendChild(div);
     }
 
+    function markRoundDone(round) {
+      var roundEl = document.getElementById("round-" + round);
+      if (!roundEl) return;
+      roundEl.querySelectorAll(".chip").forEach(function(c) { c.className = "chip done"; });
+    }
+
     function markToolDone(round, toolName, summary) {
-      var chip = document.getElementById("chip-" + round + "-" + toolName);
-      if (chip) chip.className = "chip done";
       var results = document.getElementById("round-results-" + round);
       if (results) {
         var pill = document.createElement("span");
@@ -634,6 +639,7 @@
             try {
               var payload = JSON.parse(line.slice(6));
               if (payload.type === "orchestrator") {
+                markRoundDone(payload.round - 1);
                 addRound(roundsBox, payload.round, payload.reasoning, payload.tasks || []);
                 processLines.push("[ 라운드 " + payload.round + " ]");
                 processLines.push("  reasoning: " + payload.reasoning.substring(0, 100));
@@ -651,6 +657,7 @@
                 answerBody.textContent = text;
                 scrollChat();
               } else if (payload.type === "done") {
+                markRoundDone(currentRound);
                 if (payload.references && payload.references.length > 0) {
                   refBlock.style.display = "flex";
                   var refItems = payload.references.map(function(r) { 

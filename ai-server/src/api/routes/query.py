@@ -1,7 +1,6 @@
 from __future__ import annotations
 import ast
 import json
-import json as _json
 import logging
 import uuid
 from typing import Any, AsyncGenerator
@@ -37,38 +36,51 @@ def _item_to_ref(d: dict) -> "dict | None":
     return None
 
 
-def _summarize_result(result_str: str) -> str:
-    """tool result 문자열을 한 줄 요약으로 변환."""
-    s = str(result_str)
-    if s.startswith("[ERROR]"):
-        return "오류"
+def _try_parse(s: str):
+    """JSON 우선, 실패 시 ast.literal_eval로 파싱."""
     try:
-        items = ast.literal_eval(s)
-        if not isinstance(items, list):
-            return "1건"
-        texts = [i["text"] for i in items if isinstance(i, dict) and i.get("type") == "text"]
-        if not texts:
-            return f"{len(items)}건"
-        previews: list = []
-        for text in texts[:5]:
-            try:
-                d = _json.loads(text)
-                entries = d if isinstance(d, list) else [d]
-                for entry in entries[:3]:
-                    if not isinstance(entry, dict):
-                        continue
-                    label = str(entry.get("name") or entry.get("title") or entry.get("id") or "")[:25]
-                    score = entry.get("score")
-                    if score is not None:
-                        label += f"({score:.2f})"
-                    if label:
-                        previews.append(label)
-            except Exception:
-                pass
-        count = len(texts)
-        return f"{count}건" + (f": {', '.join(previews[:3])}" if previews else "")
+        return json.loads(s)
     except Exception:
+        pass
+    try:
+        return ast.literal_eval(s)
+    except Exception:
+        return None
+
+
+def _iter_entities(result_str: str):
+    """tool result 문자열에서 entity dict를 순서대로 yield."""
+    if str(result_str).startswith("[ERROR]"):
+        return
+    items = _try_parse(str(result_str))
+    if not isinstance(items, list):
+        return
+    for item in items:
+        if not isinstance(item, dict) or item.get("type") != "text":
+            continue
+        data = _try_parse(item.get("text", ""))
+        if data is None:
+            continue
+        for d in (data if isinstance(data, list) else [data])[:5]:
+            if isinstance(d, dict):
+                yield d
+
+
+def _summarize_result(result_str: str) -> str:
+    if str(result_str).startswith("[ERROR]"):
+        return "오류"
+    entities = list(_iter_entities(result_str))
+    if not entities:
         return "결과 있음"
+    previews = []
+    for d in entities[:3]:
+        label = str(d.get("name") or d.get("title") or d.get("id") or "")[:25]
+        score = d.get("score")
+        if score is not None:
+            label += f"({score:.2f})"
+        if label:
+            previews.append(label)
+    return f"{len(entities)}건" + (f": {', '.join(previews)}" if previews else "")
 
 
 def _build_references(tool_results: dict) -> list:
@@ -76,42 +88,19 @@ def _build_references(tool_results: dict) -> list:
     seen: set = set()
     for results in tool_results.values():
         for result_str in results:
-            if str(result_str).startswith("[ERROR]"):
-                continue
-            try:
-                items = ast.literal_eval(str(result_str))
-                if not isinstance(items, list):
-                    continue
-                for item in items:
-                    if not isinstance(item, dict) or item.get("type") != "text":
-                        continue
-                    text = item.get("text", "")
-                    if not text:
-                        continue
-                    try:
-                        data = _json.loads(text)
-                        if not isinstance(data, list):
-                            data = [data]
-                        for d in data[:5]:
-                            if not isinstance(d, dict):
-                                continue
-                            ref = _item_to_ref(d)
-                            if ref and ref["id"] and ref["id"] not in seen:
-                                seen.add(ref["id"])
-                                ref["num"] = len(refs) + 1
-                                refs.append(ref)
-                    except Exception:
-                        continue
-            except Exception:
-                continue
+            for d in _iter_entities(result_str):
+                ref = _item_to_ref(d)
+                if ref and ref["id"] and ref["id"] not in seen:
+                    seen.add(ref["id"])
+                    ref["num"] = len(refs) + 1
+                    refs.append(ref)
     return refs
 
 
 @router.post("/agent/query")
 async def agent_query(body: QueryRequest, request: Request) -> Any:
-    graph           = request.app.state.graph
-    llm_with_tools  = request.app.state.llm_with_tools
-    tools_by_name   = request.app.state.tools_by_name
+    graph         = request.app.state.graph
+    tools_by_name = request.app.state.tools_by_name
     config_repo     = request.app.state.config_repo
 
     # 설정 우선순위: API 파라미터 > DB > 기본값
@@ -130,11 +119,10 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
 
     lg_config: dict[str, Any] = {
         "configurable": {
-            "thread_id":      thread_id,
-            "llm_with_tools": llm_with_tools,
-            "tools_by_name":  tools_by_name,
+            "thread_id":     thread_id,
+            "tools_by_name": tools_by_name,
             "generate_model": resolved.generate_model,
-            "max_replan":     resolved.max_replan,
+            "max_replan":    resolved.max_replan,
         },
         "recursion_limit": 50,
     }
@@ -143,6 +131,7 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         "iteration_count": 0,
         "tool_results":    {},
         "executed_tasks":  [],
+        "no_new_data":     False,
     }
 
     return EventSourceResponse(_stream_events(graph, initial_state, lg_config))
@@ -187,7 +176,7 @@ async def _stream_events(
                     yield json.dumps({
                         "type":      "orchestrator",
                         "round":     iteration_count,
-                        "reasoning": str(orch_msg.content)[:400],
+                        "reasoning": str(orch_msg.content),
                         "tasks":     pending_tasks,
                     })
 
