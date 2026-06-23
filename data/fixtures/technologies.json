@@ -1,0 +1,86 @@
+[
+  {
+    "tech_id": "T001",
+    "id": "T001",
+    "name": "PIM (Processing-in-Memory)",
+    "trl": 6,
+    "market_growth_rate_percent": 38.4,
+    "investment_priority": "high",
+    "description": "메모리 내부에서 연산을 수행하여 데이터 이동 병목을 제거. LLM 추론 가속에 핵심.",
+    "keywords": "PIM 메모리 연산 LLM 가속 병목 데이터이동",
+    "key_players": ["SK하이닉스", "삼성전자", "Micron", "UPMEM"],
+    "text": "PIM Processing-in-Memory. 메모리 내부에서 연산을 수행하여 데이터 이동 병목을 제거. LLM 추론 가속에 핵심. TRL 6. PIM 메모리 연산 LLM 가속 병목 데이터이동"
+  },
+  {
+    "tech_id": "T002",
+    "id": "T002",
+    "name": "뉴로모픽 컴퓨팅",
+    "trl": 5,
+    "market_growth_rate_percent": 21.7,
+    "investment_priority": "medium",
+    "description": "뇌 신경망 구조를 모방한 저전력 AI 칩. 엣지 IoT·실시간 센서 처리에 적합.",
+    "keywords": "뉴로모픽 저전력 AI 칩 엣지 IoT 센서 신경망",
+    "key_players": ["Intel (Loihi)", "IBM (TrueNorth)", "BrainChip", "KAIST"],
+    "text": "뉴로모픽 컴퓨팅 Neuromorphic Computing. 뇌 신경망 구조를 모방한 저전력 AI 칩. 엣지 IoT 실시간 센서 처리에 적합. TRL 5. 뉴로모픽 저전력 AI 칩 엣지 IoT 센서 신경망"
+  },
+  {
+    "tech_id": "T003",
+    "id": "T003",
+    "name": "광자 AI 칩 (Photonic AI)",
+    "trl": 4,
+    "market_growth_rate_percent": 45.2,
+    "investment_priority": "high",
+    "description": "광 신호로 행렬 연산을 광속으로 처리. 에너지 효율 1000배 잠재력.",
+    "keywords": "광자 photonic AI 칩 행렬연산 에너지효율 광속",
+    "key_players": ["Lightmatter", "Luminous Computing", "ETRI"],
+    "text": "광자 AI 칩 Photonic AI. 광 신호로 행렬 연산을 광속으로 처리. 에너지 효율 1000배 잠재력. TRL 4. 광자 photonic AI 칩 행렬연산 에너지효율 광속"
+  },
+  {
+    "tech_id": "T004",
+    "id": "T004",
+    "name": "3D-IC 이기종 집적",
+    "trl": 7,
+    "market_growth_rate_percent": 29.1,
+    "investment_priority": "high",
+    "description": "CPU·GPU·NPU·HBM을 수직 적층. 대역폭 극대화·패키지 면적 최소화.",
+    "keywords": "3D-IC 이기종 집적 적층 CPU GPU NPU HBM 대역폭",
+    "key_players": ["TSMC (SoIC)", "삼성전자 (X-Cube)", "인텔 (Foveros)"],
+    "text": "3D-IC 이기종 집적 Heterogeneous Integration. CPU GPU NPU HBM을 수직 적층. 대역폭 극대화 패키지 면적 최소화. TRL 7. 3D-IC 이기종 집적 적층 대역폭"
+  },
+  {
+    "tech_id": "T005",
+    "id": "T005",
+    "name": "온디바이스 LLM 추론 최적화",
+    "trl": 7,
+    "market_growth_rate_percent": 52.3,
+    "investment_priority": "high",
+    "description": "양자화·프루닝·KV캐시 압축으로 LLM을 엣지 NPU에서 실행. 프라이버시·지연 해결.",
+    "keywords": "온디바이스 LLM 추론 양자화 프루닝 NPU 엣지 프라이버시",
+    "key_players": ["Qualcomm", "Apple", "삼성전자", "MediaTek"],
+    "text": "온디바이스 LLM 추론 최적화 On-device LLM Inference. 양자화 프루닝 KV캐시 압축으로 LLM을 엣지 NPU에서 실행. TRL 7. 온디바이스 LLM 추론 양자화 프루닝 NPU 엣지"
+  },
+  {
+    "tech_id": "T006",
+    "id": "T006",
+    "name": "CXL (Compute Express Link) 메모리",
+    "trl": 6,
+    "market_growth_rate_percent": 34.8,
+    "investment_priority": "medium",
+    "description": "CPU-가속기-메모리 간 고대역폭 저지연 인터커넥트. 데이터센터 AI 인프라 핵심.",
+    "keywords": "CXL 메모리 인터커넥트 고대역폭 저지연 데이터센터 AI",
+    "key_players": ["SK하이닉스", "Micron", "Intel", "Montage Technology"],
+    "text": "CXL Compute Express Link 메모리. CPU 가속기 메모리 간 고대역폭 저지연 인터커넥트. 데이터센터 AI 인프라 핵심. TRL 6. CXL 메모리 인터커넥트 고대역폭 저지연"
+  },
+  {
+    "tech_id": "T007",
+    "id": "T007",
+    "name": "아날로그 인-메모리 컴퓨팅",
+    "trl": 4,
+    "market_growth_rate_percent": 18.6,
+    "investment_priority": "medium",
+    "description": "RRAM·PCM 소자에서 아날로그 방식으로 행렬 곱셈. 에너지 소비 10분의 1.",
+    "keywords": "아날로그 인메모리 RRAM PCM 행렬 에너지 소자",
+    "key_players": ["IBM Research", "IMEC", "Mythic AI", "ETRI"],
+    "text": "아날로그 인-메모리 컴퓨팅 Analog In-Memory Computing. RRAM PCM 소자에서 아날로그 방식으로 행렬 곱셈. 에너지 소비 10분의 1. TRL 4. 아날로그 인메모리 RRAM PCM 행렬 에너지"
+  }
+]

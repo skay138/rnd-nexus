@@ -1,0 +1,122 @@
+[
+  {
+    "patent_id": "KR10-2024-0012345",
+    "id": "KR10-2024-0012345",
+    "title": "뉴로모픽 반도체 소자 및 그 제조 방법",
+    "applicant": "삼성전자",
+    "filing_date": "2024-01-15",
+    "year": 2024,
+    "country": "KR",
+    "keywords": "뉴로모픽 반도체 시냅스 뉴런 집적",
+    "abstract": "시냅스 소자와 뉴런 회로를 단일 칩에 집적한 뉴로모픽 반도체 구조.",
+    "text": "뉴로모픽 반도체 소자 및 그 제조 방법. 시냅스 소자와 뉴런 회로를 단일 칩에 집적한 뉴로모픽 반도체 구조. 뉴로모픽 반도체 시냅스 뉴런 집적"
+  },
+  {
+    "patent_id": "KR10-2023-0098765",
+    "id": "KR10-2023-0098765",
+    "title": "고대역폭 메모리를 이용한 AI 가속기 아키텍처",
+    "applicant": "SK하이닉스",
+    "filing_date": "2023-07-20",
+    "year": 2023,
+    "country": "KR",
+    "keywords": "HBM AI 가속기 3D 집적 메모리 대역폭",
+    "abstract": "HBM 스택을 AI 가속기에 3D 집적하여 메모리 대역폭 병목 해소.",
+    "text": "고대역폭 메모리를 이용한 AI 가속기 아키텍처. HBM 스택을 AI 가속기에 3D 집적하여 메모리 대역폭 병목 해소. HBM AI 가속기 3D 집적 메모리 대역폭"
+  },
+  {
+    "patent_id": "US11234567",
+    "id": "US11234567",
+    "title": "Processing-in-Memory Architecture for Deep Neural Network Acceleration",
+    "applicant": "Samsung Electronics",
+    "filing_date": "2023-03-10",
+    "year": 2023,
+    "country": "US",
+    "keywords": "PIM processing-in-memory DRAM MAC DNN acceleration",
+    "abstract": "DRAM 어레이 내부에 MAC 연산 유닛을 내장한 PIM 구조.",
+    "text": "Processing-in-Memory Architecture for Deep Neural Network Acceleration. DRAM 어레이 내부에 MAC 연산 유닛을 내장한 PIM 구조. PIM processing-in-memory DRAM MAC DNN acceleration"
+  },
+  {
+    "patent_id": "KR10-2024-0034521",
+    "id": "KR10-2024-0034521",
+    "title": "저전력 온디바이스 AI 추론을 위한 NPU 설계",
+    "applicant": "LG전자",
+    "filing_date": "2024-02-28",
+    "year": 2024,
+    "country": "KR",
+    "keywords": "NPU 온디바이스 AI 추론 저전력 모바일 LLM",
+    "abstract": "모바일 환경에서 1W 이하 전력으로 LLM 추론이 가능한 NPU 구조.",
+    "text": "저전력 온디바이스 AI 추론을 위한 NPU 설계. 모바일 환경에서 1W 이하 전력으로 LLM 추론이 가능한 NPU 구조. NPU 온디바이스 AI 추론 저전력 모바일 LLM"
+  },
+  {
+    "patent_id": "JP2023-456789",
+    "id": "JP2023-456789",
+    "title": "スパース演算対応AIアクセラレータ",
+    "applicant": "Preferred Networks",
+    "filing_date": "2023-11-05",
+    "year": 2023,
+    "country": "JP",
+    "keywords": "sparse tensor AI accelerator hardware matrix",
+    "abstract": "희소 행렬 연산을 하드웨어 수준에서 가속하는 AI 반도체 설계.",
+    "text": "스파스 연산 대응 AI 가속기. 희소 행렬 연산을 하드웨어 수준에서 가속하는 AI 반도체 설계. sparse tensor AI accelerator hardware matrix"
+  },
+  {
+    "patent_id": "CN202310098765",
+    "id": "CN202310098765",
+    "title": "基于Chiplet技术的异构AI芯片集成方法",
+    "applicant": "Huawei Technologies",
+    "filing_date": "2023-05-18",
+    "year": 2023,
+    "country": "CN",
+    "keywords": "chiplet heterogeneous AI chip integration interconnect",
+    "abstract": "칩릿 기반 이종 AI 칩 통합 및 고속 인터커넥트 설계 방법.",
+    "text": "칩릿 기술 기반 이종 AI 칩 집적 방법. 칩릿 기반 이종 AI 칩 통합 및 고속 인터커넥트 설계 방법. chiplet heterogeneous AI chip integration interconnect"
+  },
+  {
+    "patent_id": "KR10-2023-0067890",
+    "id": "KR10-2023-0067890",
+    "title": "RISC-V 기반 확장 가능한 AI 프로세서 명령어 집합",
+    "applicant": "KAIST",
+    "filing_date": "2023-04-12",
+    "year": 2023,
+    "country": "KR",
+    "keywords": "RISC-V AI 프로세서 명령어 집합 확장",
+    "abstract": "RISC-V 커스텀 확장을 통한 AI 연산 전용 명령어 집합 구조.",
+    "text": "RISC-V 기반 확장 가능한 AI 프로세서 명령어 집합. RISC-V 커스텀 확장을 통한 AI 연산 전용 명령어 집합 구조. RISC-V AI 프로세서 명령어 집합 확장"
+  },
+  {
+    "patent_id": "US11876543",
+    "id": "US11876543",
+    "title": "Analog Compute-in-Memory for Energy-Efficient AI Inference",
+    "applicant": "Intel Corporation",
+    "filing_date": "2024-01-30",
+    "year": 2024,
+    "country": "US",
+    "keywords": "analog compute-in-memory energy efficient AI inference CIM",
+    "abstract": "아날로그 컴퓨트-인-메모리 구조를 활용한 에너지 효율적 AI 추론.",
+    "text": "Analog Compute-in-Memory for Energy-Efficient AI Inference. 아날로그 컴퓨트-인-메모리 구조를 활용한 에너지 효율적 AI 추론. analog compute-in-memory energy efficient AI inference CIM"
+  },
+  {
+    "patent_id": "KR10-2024-0078901",
+    "id": "KR10-2024-0078901",
+    "title": "CXL 기반 AI 메모리 확장 장치 및 운용 방법",
+    "applicant": "SK하이닉스",
+    "filing_date": "2024-03-22",
+    "year": 2024,
+    "country": "KR",
+    "keywords": "CXL 메모리 확장 AI 데이터센터 저지연",
+    "abstract": "CXL 인터커넥트를 이용한 AI 서버 메모리 동적 확장 및 저지연 접근 방법.",
+    "text": "CXL 기반 AI 메모리 확장 장치 및 운용 방법. CXL 인터커넥트를 이용한 AI 서버 메모리 동적 확장 및 저지연 접근 방법. CXL 메모리 확장 AI 데이터센터 저지연"
+  },
+  {
+    "patent_id": "US11999888",
+    "id": "US11999888",
+    "title": "Photonic Matrix Multiplication Accelerator for AI Workloads",
+    "applicant": "Lightmatter Inc.",
+    "filing_date": "2024-02-14",
+    "year": 2024,
+    "country": "US",
+    "keywords": "photonic matrix multiplication AI accelerator optical computing",
+    "abstract": "광자 행렬 곱셈 유닛으로 AI 행렬 연산을 광속 처리하는 가속기 구조.",
+    "text": "Photonic Matrix Multiplication Accelerator for AI Workloads. 광자 행렬 곱셈 유닛으로 AI 행렬 연산을 광속 처리하는 가속기 구조. photonic matrix multiplication AI accelerator optical computing"
+  }
+]

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>R&D Nexus</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 16px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 720px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      margin-top: 3rem;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+    }
+    .header-left { display: flex; flex-direction: column; gap: 0.3rem; }
+
+    .badge {
+      display: inline-block;
+      background: #7c3aed;
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      width: fit-content;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 700; color: #f0f4ff; }
+
+    .session-bar { display: flex; align-items: center; gap: 0.5rem; }
+    .session-label { color: #4a5568; font-size: 0.75rem; }
+    .session-id {
+      color: #7c3aed;
+      font-size: 0.75rem;
+      font-family: monospace;
+      background: #12142080;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+    .btn-reset {
+      background: transparent;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #8892a4;
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-reset:hover { border-color: #f56565; color: #fc8181; }
+
+    .chat {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      max-height: 480px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .chat:empty { display: none; }
+
+    .msg { display: flex; flex-direction: column; gap: 0.25rem; }
+    .msg-role {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .msg.user .msg-role      { color: #7c3aed; }
+    .msg.assistant .msg-role { color: #38bdf8; }
+
+    .msg-body {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #c7d2fe;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      padding: 0.75rem 1rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user .msg-body { color: #e2e8f0; border-color: #3d3f6a; }
+
+    .msg-body.streaming::after {
+      content: "▋";
+      animation: blink 0.7s steps(1) infinite;
+      color: #7c3aed;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .plan-box {
+      margin-top: 0.25rem;
+      background: #0d1117;
+      border: 1px solid #2d3148;
+      border-left: 3px solid #7c3aed;
+      border-radius: 6px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.78rem;
+      color: #a5b4fc;
+    }
+    .plan-title {
+      font-weight: 700;
+      color: #7c3aed;
+      margin-bottom: 0.4rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .plan-step { margin-bottom: 0.2rem; }
+    .plan-step::before { content: "→ "; color: #6366f1; }
+
+    .tool-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+    .chip {
+      background: #1e2035;
+      border: 1px solid #3d3f6a;
+      border-radius: 999px;
+      color: #a5b4fc;
+      font-size: 0.72rem;
+      padding: 0.15rem 0.6rem;
+    }
+
+    .example-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .example-chip {
+      background: #1e2035;
+      border: 1px solid #3d3f6a;
+      border-radius: 999px;
+      color: #a5b4fc;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .example-chip:hover {
+      background: #3d3f6a;
+      color: #fff;
+    }
+
+    .settings-panel {
+      background: #121420;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: none;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    .setting-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    .setting-group label { font-size: 0.75rem; color: #8892a4; font-weight: 600; }
+    .setting-group input,
+    .setting-group select {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #fff;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .setting-group input:focus,
+    .setting-group select:focus { border-color: #7c3aed; }
+    .setting-group select option { background: #1a1d27; }
+    .btn-toggle-settings {
+      background: transparent;
+      border: none;
+      color: #7c3aed;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-bottom: 0.5rem;
+      align-self: flex-end;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .search-box { display: flex; gap: 0.5rem; }
+    .search-box input {
+      flex: 1;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-box input:focus { border-color: #7c3aed; }
+    .search-box input::placeholder { color: #4a5568; }
+    .search-box input:disabled { opacity: 0.5; }
+
+    .btn-search {
+      background: #7c3aed;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.65rem 1.25rem;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .btn-search:hover:not(:disabled) { background: #6d28d9; }
+    .btn-search:disabled { background: #3d3f5a; cursor: not-allowed; }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid #2d3148;
+    }
+    .links a {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #8892a4;
+      font-size: 0.78rem;
+      padding: 0.4rem 0.9rem;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .links a:hover { border-color: #7c3aed; color: #c7d2fe; }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #4a5568;
+      margin-right: 5px;
+      vertical-align: middle;
+      transition: background 0.3s;
+    }
+    .status-dot.ok  { background: #48bb78; }
+    .status-dot.err { background: #f56565; }
+
+    .chat::-webkit-scrollbar { width: 4px; }
+    .chat::-webkit-scrollbar-track { background: transparent; }
+    .chat::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 2px; }
+
+    .ref-block {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid #2d3148;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .ref-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #4a5568;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-right: 0.2rem;
+    }
+    .ref-item {
+      background: #12142080;
+      border: 1px solid #2d3148;
+      border-radius: 4px;
+      color: #6b7280;
+      font-size: 0.72rem;
+      font-family: monospace;
+      padding: 0.1rem 0.45rem;
+    }
+
+    .process-log {
+      margin-top: 0.35rem;
+    }
+    .process-log summary {
+      color: #4a5568;
+      cursor: pointer;
+      font-size: 0.72rem;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .process-log summary:hover { color: #7c3aed; }
+    .process-log summary::before { content: "▸"; font-size: 0.65rem; }
+    .process-log[open] summary::before { content: "▾"; }
+    .process-content {
+      margin-top: 0.4rem;
+      background: #0a0c14;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.73rem;
+      color: #4a5568;
+      font-family: monospace;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="badge">R&amp;D Nexus</div>
+        <h1>R&amp;D AI 어시스턴트</h1>
+      </div>
+      <div class="session-bar">
+        <span class="session-label">세션</span>
+        <span class="session-id" id="session-display"></span>
+        <button class="btn-reset" onclick="resetSession()" title="세션 초기화">&#x21BA; 초기화</button>
+      </div>
+    </div>
+
+    <!-- Chat history -->
+    <div class="chat" id="chat"></div>
+
+    <!-- Advanced Settings -->
+    <div style="display: flex; flex-direction: column;">
+      <button class="btn-toggle-settings" onclick="toggleSettings()">
+        <span id="settings-icon">&#x2699;</span> 고급 설정
+      </button>
+      <div class="settings-panel" id="settings-panel">
+        <div class="setting-group">
+          <label>Generate Model</label>
+          <select id="conf-model">
+            <option value="qwen2.5:7b">qwen2.5:7b</option>
+            <option value="qwen2.5:32b">qwen2.5:32b</option>
+            <option value="llama3.1:8b">llama3.1:8b</option>
+            <option value="llama3.1:70b">llama3.1:70b</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>Max Replan</label>
+          <input type="number" id="conf-replan" value="3" min="1" max="5" step="1">
+        </div>
+        <div class="setting-group">
+          <label>Temperature</label>
+          <input type="number" id="conf-temp" value="0.0" min="0" max="1" step="0.1">
+        </div>
+        <div class="setting-group">
+          <label>Semantic Top-K</label>
+          <input type="number" id="conf-topk" value="20" min="5" max="100" step="5">
+        </div>
+        <div class="setting-group">
+          <label>Dense Weight (COSINE)</label>
+          <input type="number" id="conf-dense" value="0.3" min="0" max="1" step="0.1">
+        </div>
+        <div class="setting-group">
+          <label>Sparse Weight (BM25)</label>
+          <input type="number" id="conf-sparse" value="0.7" min="0" max="1" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Search input -->
+    <div class="search-box">
+      <input id="query" type="text"
+             placeholder="자유롭게 질문을 입력하거나, 아래 예시 질문을 클릭해 보세요." />
+      <button class="btn-search" id="btn" onclick="search()">질의</button>
+    </div>
+
+    <!-- Example Questions -->
+    <div class="example-chips">
+      <button class="example-chip" onclick="setQuery(this.innerText)">최근 뉴로모픽 컴퓨팅 분야에서 가장 영향력 있는 연구자와 특허 동향을 찾아줘</button>
+      <button class="example-chip" onclick="setQuery(this.innerText)">PIM 기술을 연구하는 주요 기관과 관련 R&D 과제 현황을 비교해 줘</button>
+      <button class="example-chip" onclick="setQuery(this.innerText)">온디바이스 LLM 최적화 관련 최신 트렌드와 핵심 논문들을 요약해 줘</button>
+      <button class="example-chip" onclick="setQuery(this.innerText)">광자 AI 칩 분야에서 기술 성숙도(TRL)가 높은 프로젝트와 핵심 플레이어는?</button>
+    </div>
+
+    <!-- Footer links -->
+    <div class="links">
+      <a href="/docs">&#x1F4C4; API Docs</a>
+      <a href="/redoc">&#x1F4D8; ReDoc</a>
+      <a href="/api/v1/health"><span class="status-dot" id="dot"></span>Health</a>
+    </div>
+  </div>
+
+  <script>
+    // ── Session management ────────────────────────────────────────────────────
+    var sessionId = newSessionId();
+
+    function newSessionId() {
+      return "web-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function renderSessionId() {
+      document.getElementById("session-display").textContent = sessionId;
+    }
+
+    function resetSession() {
+      if (!confirm("세션을 초기화하면 대화 기록이 모두 삭제됩니다. 계속할까요?")) return;
+      sessionId = newSessionId();
+      renderSessionId();
+      document.getElementById("chat").innerHTML = "";
+    }
+
+    renderSessionId();
+
+    function toggleSettings() {
+      var panel = document.getElementById("settings-panel");
+      var icon  = document.getElementById("settings-icon");
+      if (panel.style.display === "grid") {
+        panel.style.display  = "none";
+        icon.style.transform = "rotate(0deg)";
+      } else {
+        panel.style.display  = "grid";
+        icon.style.transform = "rotate(90deg)";
+      }
+    }
+
+    // ── Health check ─────────────────────────────────────────────────────────
+    fetch("/api/v1/health")
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        document.getElementById("dot").className =
+          "status-dot " + (d.status === "ok" ? "ok" : "err");
+      })
+      .catch(function() {
+        document.getElementById("dot").className = "status-dot err";
+      });
+
+    // ── Chat helpers ─────────────────────────────────────────────────────────
+    function appendUserMessage(text) {
+      var chat = document.getElementById("chat");
+      var div  = document.createElement("div");
+      div.className = "msg user";
+      div.innerHTML = '<div class="msg-role">You</div>' +
+                      '<div class="msg-body">' + escHtml(text) + '</div>';
+      chat.appendChild(div);
+      scrollChat();
+    }
+
+    function createAssistantMessage() {
+      var chat = document.getElementById("chat");
+      var div  = document.createElement("div");
+      div.className = "msg assistant";
+      div.innerHTML =
+        '<div class="msg-role">R&amp;D Nexus</div>' +
+        '<div class="plan-box" id="plan-box" style="display:none;">' +
+          '<div class="plan-title">실행 계획</div>' +
+          '<div id="plan-steps"></div>' +
+        '</div>' +
+        '<div class="tool-chips" id="chips"></div>' +
+        '<div class="msg-body streaming" id="answer-body"></div>' +
+        '<div class="ref-block" id="ref-block" style="display:none;"></div>' +
+        '<details class="process-log" id="process-log" style="display:none;">' +
+          '<summary>처리 과정</summary>' +
+          '<div class="process-content" id="process-content"></div>' +
+        '</details>';
+      chat.appendChild(div);
+      scrollChat();
+      return {
+        body:           div.querySelector("#answer-body"),
+        chips:          div.querySelector("#chips"),
+        planBox:        div.querySelector("#plan-box"),
+        planSteps:      div.querySelector("#plan-steps"),
+        refBlock:       div.querySelector("#ref-block"),
+        processLog:     div.querySelector("#process-log"),
+        processContent: div.querySelector("#process-content"),
+      };
+    }
+
+    function addToolChip(chips, toolName) {
+      var chip = document.createElement("span");
+      chip.className   = "chip";
+      chip.textContent = "⚙ " + toolName;
+      chips.appendChild(chip);
+    }
+
+    function scrollChat() {
+      var chat = document.getElementById("chat");
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g, "&amp;")
+               .replace(/</g, "&lt;")
+               .replace(/>/g, "&gt;");
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────────
+    async function search() {
+      var input     = document.getElementById("query");
+      var queryText = input.value.trim();
+      if (!queryText) return;
+
+      var btn        = document.getElementById("btn");
+      btn.disabled   = true;
+      btn.textContent = "처리 중…";
+      input.disabled  = true;
+      input.value     = "";
+
+      appendUserMessage(queryText);
+      var els = createAssistantMessage();
+      var answerBody     = els.body;
+      var chips          = els.chips;
+      var planBox        = els.planBox;
+      var planSteps      = els.planSteps;
+      var refBlock       = els.refBlock;
+      var processLog     = els.processLog;
+      var processContent = els.processContent;
+      var processLines   = [];
+
+      var config = {
+        generate_model:  document.getElementById("conf-model").value  || undefined,
+        max_replan:      parseInt(document.getElementById("conf-replan").value) || undefined,
+        temperature:     parseFloat(document.getElementById("conf-temp").value),
+        semantic_top_k:  parseInt(document.getElementById("conf-topk").value)   || undefined,
+        dense_weight:    parseFloat(document.getElementById("conf-dense").value),
+        sparse_weight:   parseFloat(document.getElementById("conf-sparse").value),
+      };
+
+      try {
+        var res = await fetch("/api/v1/agent/query", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ query: queryText, session_id: sessionId, config: config }),
+        });
+
+        var reader  = res.body.getReader();
+        var decoder = new TextDecoder();
+        var text    = "";
+
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          var lines = decoder.decode(chunk.value).split("\n");
+          for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (!line.startsWith("data: ")) continue;
+            try {
+              var payload = JSON.parse(line.slice(6));
+              if (payload.type === "plan") {
+                planBox.style.display = "block";
+                planSteps.innerHTML   = payload.steps
+                  .map(function(s) { return '<div class="plan-step">' + escHtml(s) + '</div>'; })
+                  .join("");
+                processLines.push("[ 계획 ]");
+                payload.steps.forEach(function(s) { processLines.push("  → " + s); });
+                scrollChat();
+              } else if (payload.type === "tool_call") {
+                addToolChip(chips, payload.tool);
+                var argsStr = "";
+                if (payload.args && Object.keys(payload.args).length > 0) {
+                  argsStr = "(" + Object.entries(payload.args).map(function(kv) {
+                    var v = typeof kv[1] === "string"
+                      ? '"' + kv[1].substring(0, 30) + (kv[1].length > 30 ? "…" : "") + '"'
+                      : JSON.stringify(kv[1]).substring(0, 40);
+                    return kv[0] + "=" + v;
+                  }).join(", ") + ")";
+                }
+                processLines.push("⚙ " + payload.tool + argsStr);
+                scrollChat();
+              } else if (payload.type === "tool_result") {
+                processLines.push("  └→ " + payload.summary);
+                processContent.textContent = processLines.join("\n");
+                scrollChat();
+              } else if (payload.type === "token") {
+                text += payload.content;
+                answerBody.textContent = text;
+                scrollChat();
+              } else if (payload.type === "done") {
+                if (payload.references && payload.references.length > 0) {
+                  refBlock.style.display = "flex";
+                  refBlock.innerHTML = '<span class="ref-label">출처</span>' +
+                    payload.references.map(function(r) {
+                      var title = r.title ? '“' + escHtml(r.title.substring(0, 35)) + (r.title.length > 35 ? '…' : '') + '” ' : '';
+                      return '<span class="ref-item">[' + r.num + '] ' + escHtml(r.type) + ' ' + title + '(' + escHtml(r.id) + ')</span>';
+                    }).join("");
+                }
+                if (processLines.length > 0) {
+                  processLog.style.display = "block";
+                  processContent.textContent = processLines.join("\n");
+                }
+                scrollChat();
+              } else if (payload.type === "error") {
+                answerBody.textContent = "오류: " + payload.message;
+              }
+            } catch (e) { /* non-JSON line */ }
+          }
+        }
+
+        if (!text) answerBody.textContent = "(응답 없음)";
+      } catch (e) {
+        answerBody.textContent = "연결 오류: " + e.message;
+      } finally {
+        answerBody.classList.remove("streaming");
+        btn.disabled    = false;
+        btn.textContent = "질의";
+        input.disabled  = false;
+        input.focus();
+        scrollChat();
+      }
+    }
+
+    document.getElementById("query").addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) search();
+    });
+
+    function setQuery(text) {
+      document.getElementById("query").value = text;
+      search();
+    }
+  </script>
+</body>
+</html>

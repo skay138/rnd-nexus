@@ -1,0 +1,8 @@
+[tool.uv.workspace]
+members = ["ai-server", "mcp-server"]
+
+[tool.uv]
+package = false
+
+[tool.pyrefly]
+search_path = ["ai-server/src", "mcp-server/src", "domain"]
