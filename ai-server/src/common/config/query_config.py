@@ -23,7 +23,7 @@ CONFIG_DEFAULTS: dict[str, Any] = {
 class QueryConfig:
     """요청별 설정값. None 필드는 _resolve()가 채운다."""
     generate_model:  Optional[str]   = None  # generate 노드 모델명
-    max_replan:      Optional[int]   = None  # reflection 루프 최대 횟수
+    max_iterations:  Optional[int]   = None  # 오케스트레이터 최대 라운드 수
     temperature:     Optional[float] = None  # LLM temperature
     semantic_top_k:  Optional[int]   = None  # Milvus 시맨틱 검색 top-k
     dense_weight:    Optional[float] = None  # hybrid search dense 가중치
@@ -47,7 +47,7 @@ class RequestConfig:
     노드/도구에서:
         cfg = RequestConfig.current()
         cfg.generate_model   # str, 항상 non-None
-        cfg.max_replan       # int, 항상 non-None
+        cfg.max_iterations   # int, 항상 non-None
     """
 
     _DEFAULTS: ClassVar[dict[str, Any]] = CONFIG_DEFAULTS
@@ -81,16 +81,16 @@ class RequestConfig:
                 val = repo.get(key)
                 if val is not None:
                     return val
-            # config.py(env) 기반 fallback — 모델명/replan은 여기서 처리
+            # config.py(env) 기반 fallback — 모델명/max_iterations는 여기서 처리
             if key == "generate_model":
                 return s.rnd_model_generate
-            if key == "max_replan":
-                return s.rnd_max_replan
+            if key == "max_iterations":
+                return s.rnd_max_iterations
             return RequestConfig._DEFAULTS.get(key)
 
         return QueryConfig(
             generate_model = _pick("generate_model", o.generate_model),
-            max_replan     = _pick("max_replan",     o.max_replan),
+            max_iterations = _pick("max_iterations", o.max_iterations),
             temperature    = _pick("temperature",    o.temperature),
             semantic_top_k = _pick("semantic_top_k", o.semantic_top_k),
             dense_weight   = _pick("dense_weight",   o.dense_weight),
@@ -123,8 +123,8 @@ class RequestConfig:
         return self.get("generate_model")
 
     @property
-    def max_replan(self) -> int:
-        return self.get("max_replan")
+    def max_iterations(self) -> int:
+        return self.get("max_iterations")
 
     @property
     def temperature(self) -> float:

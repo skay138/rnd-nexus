@@ -106,7 +106,7 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
     # 설정 우선순위: API 파라미터 > DB > 기본값
     override = QueryConfig(
         generate_model = body.config.generate_model  if body.config else None,
-        max_replan     = body.config.max_replan      if body.config else None,
+        max_iterations = body.config.max_iterations  if body.config else None,
         temperature    = body.config.temperature     if body.config else None,
         semantic_top_k = body.config.semantic_top_k  if body.config else None,
         dense_weight   = body.config.dense_weight    if body.config else None,
@@ -122,7 +122,7 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
             "thread_id":     thread_id,
             "tools_by_name": tools_by_name,
             "generate_model": resolved.generate_model,
-            "max_replan":    resolved.max_replan,
+            "max_iterations": resolved.max_iterations,
         },
         "recursion_limit": 50,
     }

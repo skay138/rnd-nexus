@@ -541,8 +541,8 @@
           '<div class="round-tasks" id="round-tasks-' + round + '">' +
             '<span class="parallel-label">⚡ 병렬 실행</span>' +
             tasks.map(function(t) {
-              var chipLabel = t.label || t.description.substring(0, 35) + (t.description.length > 35 ? '…' : '');
-              return '<span class="chip" title="' + escHtml(t.description) + '">' + escHtml(chipLabel) + '</span>';
+              var chipLabel = t.substring(0, 35) + (t.length > 35 ? '…' : '');
+              return '<span class="chip" title="' + escHtml(t) + '">' + escHtml(chipLabel) + '</span>';
             }).join("") +
           '</div>' +
           '<div class="round-results" id="round-results-' + round + '"></div>';
@@ -611,7 +611,7 @@
 
       var config = {
         generate_model:  document.getElementById("conf-model").value  || undefined,
-        max_replan:      parseInt(document.getElementById("conf-replan").value) || undefined,
+        max_iterations:  parseInt(document.getElementById("conf-replan").value) || undefined,
         temperature:     parseFloat(document.getElementById("conf-temp").value),
         semantic_top_k:  parseInt(document.getElementById("conf-topk").value)   || undefined,
         dense_weight:    parseFloat(document.getElementById("conf-dense").value),
@@ -642,9 +642,9 @@
                 markRoundDone(payload.round - 1);
                 addRound(roundsBox, payload.round, payload.reasoning, payload.tasks || []);
                 processLines.push("[ 라운드 " + payload.round + " ]");
-                processLines.push("  reasoning: " + payload.reasoning.substring(0, 100));
+                processLines.push("  reasoning: " + payload.reasoning.substring(0, 200));
                 (payload.tasks || []).forEach(function(t) {
-                  processLines.push("  ⚡ " + t.tool + " " + JSON.stringify(t.args).substring(0, 60));
+                  processLines.push("  ⚡ " + t.substring(0, 80));
                 });
                 scrollChat();
               } else if (payload.type === "tool_result") {

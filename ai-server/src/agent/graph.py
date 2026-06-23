@@ -11,7 +11,7 @@ from agent.edges.should_continue import should_continue
 def _after_executor(state: RDAgentState, config) -> Literal["orchestrator", "generate"]:
     if state.get("no_new_data", False):
         return "generate"
-    max_iterations = config.get("configurable", {}).get("max_replan", 3)
+    max_iterations = config.get("configurable", {}).get("max_iterations", 3)
     if state.get("iteration_count", 0) >= max_iterations:
         return "generate"
     return "orchestrator"

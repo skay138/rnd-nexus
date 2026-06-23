@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 from pydantic import BaseModel, Field
@@ -12,14 +11,9 @@ from memory.compaction import should_compact, compact_messages
 logger = logging.getLogger(__name__)
 
 
-class TaskDescription(BaseModel):
-    description: str = Field(description="워커에게 전달할 태스크 설명 — 무엇을 조사/수집할지 자연어로 기술")
-    label: str       = Field(default="", description="태스크 레이블 (로깅·UI용)")
-
-
 class OrchestratorPlan(BaseModel):
-    reasoning: str              = Field(description="수집 현황 평가 및 다음 전략 (한국어)")
-    tasks: list[TaskDescription] = Field(description="병렬 실행할 태스크 목록. 수집 완료 시 빈 리스트")
+    reasoning: str       = Field(description="수집 현황 평가 및 다음 전략 (한국어)")
+    tasks: list[str]     = Field(description="병렬 실행할 태스크 설명 목록. 수집 완료 시 빈 리스트")
 
 
 _STRATEGY = """
@@ -53,13 +47,13 @@ def _build_capabilities(tools_by_name: dict) -> str:
 async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     configurable    = config.get("configurable", {})
-    max_iterations  = configurable.get("max_replan", 3)
+    max_iterations  = configurable.get("max_iterations", 3)
     tools_by_name   = configurable.get("tools_by_name", {})
     iteration_count = state.get("iteration_count", 0)
 
     system_prompt = f"""<language>Korean</language>
 
-당신은 R&D 데이터 수집 오케스트레이터입니다. reasoning은 한국어로 작성하세요.
+당신은 R&D 데이터 수집 오케스트레이터입니다. 답변은 한국어로 작성하세요.
 사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집하고, 완료되면 tasks=[]를 반환하세요.
 당신은 태스크를 기술하고 워커에게 위임합니다 — 도구를 직접 지정하지 마세요.
 각 워커는 태스크 설명을 보고 스스로 적합한 도구를 선택해 실행합니다.
@@ -87,7 +81,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         plan: OrchestratorPlan = await structured.ainvoke(
             [SystemMessage(content=system_prompt)] + messages
         )
-        tasks = [t.model_dump() for t in plan.tasks]
+        tasks = plan.tasks
         reasoning = plan.reasoning
     except Exception as e:
         logger.error("[orchestrator] structured output 실패: %s", e)
@@ -96,9 +90,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     elapsed = time.perf_counter() - t0
 
     if tasks:
-        task_lines = "\n".join(
-            f"  - [{t.get('label', '')}] {t['description']}" for t in tasks
-        )
+        task_lines = "\n".join(f"  - {t}" for t in tasks)
         msg_content = f"{reasoning}\n\n[계획한 태스크]\n{task_lines}"
     else:
         msg_content = f"{reasoning}\n\n[수집 완료 — 생성 단계 진행]"
@@ -107,7 +99,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         "[orchestrator] iter=%d/%d elapsed=%.2fs tasks=%d\nreasoning: %s\ntasks:\n%s",
         iteration_count + 1, max_iterations, elapsed, len(tasks),
         reasoning,
-        json.dumps(tasks, ensure_ascii=False, indent=2) if tasks else "  (없음)",
+        "\n".join(f"  - {t}" for t in tasks) if tasks else "  (없음)",
     )
 
     return {

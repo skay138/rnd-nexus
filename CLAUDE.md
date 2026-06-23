@@ -37,7 +37,7 @@ AI 반도체 핵심 연구자를 추천해줘
 - **Worker Agent:** 각 태스크를 받아 어떤 도구를 어떻게 쓸지 스스로 판단 (mini ReAct loop)
 - **코드가 담당:** 루프 제어·종료, 중복 태스크 차단, 에러 격리, Memory 관리
 
-`iteration_count >= max_replan` 초과 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
+`iteration_count >= max_iterations` 초과 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
 
 ### 도구는 RunnableConfig로 주입
 
@@ -68,7 +68,7 @@ HTTP POST /agent/query  (SSE 스트리밍)
 RequestConfig.set_current()       ← API params > MariaDB > defaults
     ↓
 orchestrator                      ← OrchestratorPlan (with_structured_output)
-                                    고수준 태스크 목록 반환 {description, label}
+                                    고수준 태스크 목록 반환 list[str]
     ↓
 should_continue                   ← pending_tasks 유무 + iteration_count 확인
     ├─ tasks 있음 → parallel_executor
@@ -78,7 +78,7 @@ parallel_executor                 ← 태스크별 Worker Agent 병렬 실행
     각 Worker: ChatOllama.bind_tools() + ReAct loop (최대 5스텝)
     의존관계 도구 호출도 워커 내부에서 자율 처리
          ↓
-_after_executor                   ← no_new_data 또는 iteration_count >= max_replan
+_after_executor                   ← no_new_data 또는 iteration_count >= max_iterations
     ├─ 조건 충족 → generate
     └─ 아니면 → orchestrator
          ↓
@@ -179,8 +179,8 @@ class RDAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     tool_results: dict[str, list[str]]  # {tool_name: [result_str, ...]} — _build_references용
     iteration_count: int                # 오케스트레이터 호출 횟수
-    pending_tasks: list[dict]           # [{description, label}] — 이번 라운드 실행 태스크
-    executed_tasks: list[dict]          # [{description, label}] — 코드 레벨 dedup용
+    pending_tasks: list[str]            # 이번 라운드 실행 태스크 설명 목록
+    executed_tasks: list[str]           # 코드 레벨 dedup용 (실행된 태스크 설명)
     no_new_data: bool                   # 중복 태스크만 남았을 때 generate로 단락
 ```
 
@@ -194,13 +194,13 @@ class RDAgentState(TypedDict):
 ```python
 # src/common/config/query_config.py
 CONFIG_DEFAULTS = {
-    "generate_model": "qwen2.5:7b",
-    "max_replan": 3,
-    "temperature": 0.0,
+    "temperature":    0.0,
     "semantic_top_k": 20,
-    "dense_weight": 0.3,
-    "sparse_weight": 0.7,
+    "dense_weight":   0.3,
+    "sparse_weight":  0.7,
 }
+# max_iterations / generate_model 은 config.py(env) 에서 fallback
+# rnd_max_iterations: int = 3  (Settings)
 
 # 우선순위: API 파라미터 > MariaDB system_config > CONFIG_DEFAULTS
 class RequestConfig:
@@ -221,13 +221,9 @@ MariaDB `system_config` 테이블 (key VARCHAR, value JSON):
 ### orchestrator
 
 ```python
-class TaskDescription(BaseModel):
-    description: str  # 자연어 태스크 설명 — 도구 이름·파라미터 지정 없음
-    label: str        # 로깅·UI용 레이블
-
 class OrchestratorPlan(BaseModel):
-    reasoning: str               # 수집 현황 평가 및 전략 (한국어)
-    tasks: list[TaskDescription] # 병렬 실행 태스크. 수집 완료 시 []
+    reasoning: str   # 수집 현황 평가 및 전략 (한국어)
+    tasks: list[str] # 병렬 실행 태스크 설명 목록. 수집 완료 시 []
 
 async def orchestrator(state, config) -> dict:
     # _build_capabilities(tools_by_name) — 동적 capabilities 주입
@@ -244,14 +240,14 @@ async def orchestrator(state, config) -> dict:
 ```python
 _WORKER_MAX_STEPS = 5
 
-async def _run_worker(task, tools_by_name, settings) -> list[tuple[str, str]]:
+async def _run_worker(task: str, tools_by_name, settings) -> list[tuple[str, str]]:
     # ChatOllama.bind_tools(all_tools) + ReAct loop
     # 도구 호출 → 결과 분석 → 추가 호출 여부 자율 판단
     # 의존관계(semantic_search → get_entities)도 내부에서 처리
     return [(tool_name, result_str), ...]
 
 async def parallel_executor(state, config) -> dict:
-    # _task_key(description) 기준 중복 차단
+    # _task_key(task) 기준 중복 차단 (executed_tasks: list[str])
     # asyncio.gather(*[_run_worker(t, ...) for t in fresh_tasks])
     # tool_results[tool_name] += [result_str]
     # AIMessage(name="tool_results") 생성
@@ -409,9 +405,9 @@ COMPACTION_THRESHOLD = 80_000  # 토큰 초과 시 압축 트리거 (orchestrato
 ```
 [orchestrator] iter=1/3 elapsed=1.2s tasks=2
   reasoning: ...
-  tasks: [{description: ..., label: ...}]
+  tasks: ["논문 조사 ...", "특허 동향 분석 ..."]
 
-[worker:태스크레이블] semantic_search elapsed=0.4s
+[worker:태스크설명앞40자] semantic_search elapsed=0.4s
   args: {"query": "..."}
   result: [전체 결과]
 
@@ -481,7 +477,7 @@ asyncio.run(show())
 OLLAMA_BASE_URL=http://localhost:11430  # Docker 내부: http://ollama:11434
 RND_MODEL=qwen2.5:7b
 RND_MODEL_GENERATE=qwen2.5:7b
-RND_MAX_REPLAN=3
+RND_MAX_ITERATIONS=3
 RND_LOG_LEVEL=INFO
 REDIS_URL=redis://localhost:6379
 MCP_SERVER_URL=http://localhost:8000/sse
@@ -506,7 +502,7 @@ API_PORT=8080
 
 ### 금지 사항
 - `time.sleep()`으로 루프를 대기시키지 않습니다
-- `max_replan` 없이 루프를 열어두지 않습니다
+- `max_iterations` 없이 루프를 열어두지 않습니다
 - State 필드를 노드 내부에서 직접 뮤테이션하지 않습니다 (항상 `return dict`)
 - worker에서 예외를 `raise`하지 않습니다 (`[ERROR] ...` 문자열로 반환)
 - orchestrator 프롬프트에 도구 이름·파라미터를 하드코딩하지 않습니다 (`_build_capabilities()` 사용)

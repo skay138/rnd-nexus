@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class ConfigOverride(BaseModel):
     generate_model:  Optional[str]   = None
-    max_replan:      Optional[int]   = None
+    max_iterations:  Optional[int]   = None
     temperature:     Optional[float] = None
     semantic_top_k:  Optional[int]   = None
     dense_weight:    Optional[float] = None

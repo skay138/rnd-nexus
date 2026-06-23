@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     rnd_model_generate: str = "qwen2.5:7b"
 
     # Agent 제어
-    rnd_max_replan: int = 3
+    rnd_max_iterations: int = 3
     rnd_log_level: str = "DEBUG"
 
     # Redis (LangGraph CheckpointSaver)
