@@ -138,7 +138,9 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     )
     logger.debug("[parallel_executor] 완료 %.2fs\n%s\n%s", total_elapsed, summary, _SEP)
 
+    current_round = state.get("iteration_count", 0)
     updated: dict[str, list[str]] = dict(state.get("tool_results", {}))
+    new_task_results: list[dict] = []
     msg_lines: list[str] = []
 
     for task, tool_pairs in zip(fresh_tasks, worker_results):
@@ -146,6 +148,11 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
         msg_lines.append(f"# {task[:40]}\n" + "\n\n".join(tool_lines))
         for tool_name, result_str in tool_pairs:
             updated[tool_name] = updated.get(tool_name, []) + [result_str]
+        new_task_results.append({
+            "round": current_round,
+            "task":  task,
+            "tools": [{"name": tn, "summary": _fmt_result(rs)} for tn, rs in tool_pairs],
+        })
 
     executed.extend(fresh_tasks)
 
@@ -157,6 +164,7 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     return {
         "messages":       [result_message],
         "tool_results":   updated,
+        "task_results":   list(state.get("task_results", [])) + new_task_results,
         "pending_tasks":  [],
         "executed_tasks": executed,
         "no_new_data":    False,

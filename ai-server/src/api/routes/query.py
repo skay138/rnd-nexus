@@ -142,9 +142,9 @@ async def _stream_events(
     initial_state: dict[str, Any],
     config: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    last_tool_results: dict   = {}
-    prev_tool_results: dict   = {}
-    last_iteration_count: int = 0
+    last_tool_results: dict    = {}
+    prev_task_result_count: int = 0
+    last_iteration_count: int  = 0
 
     try:
         async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
@@ -180,15 +180,17 @@ async def _stream_events(
                         "tasks":     pending_tasks,
                     })
 
-            # 병렬 실행 결과 (parallel_executor)
+            # task별 실행 결과 (parallel_executor)
+            task_results_list = data.get("task_results", [])
+            if len(task_results_list) > prev_task_result_count:
+                for tr in task_results_list[prev_task_result_count:]:
+                    yield json.dumps({"type": "task_result", "round": tr["round"],
+                                      "task": tr["task"], "tools": tr["tools"]})
+                prev_task_result_count = len(task_results_list)
+
+            # _build_references용 tool_results 유지
             if tool_results:
-                for tool_name, results in tool_results.items():
-                    prev_count = len(prev_tool_results.get(tool_name, []))
-                    if len(results) > prev_count:
-                        summary = _summarize_result(results[-1])
-                        yield json.dumps({"type": "tool_result", "tool": tool_name, "summary": summary})
                 last_tool_results = tool_results
-                prev_tool_results = {k: list(v) for k, v in tool_results.items()}
 
     except Exception as e:
         logger.exception("agent_query 스트리밍 오류")
