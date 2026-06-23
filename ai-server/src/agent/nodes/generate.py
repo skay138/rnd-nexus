@@ -22,11 +22,21 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 
 
     # 사용자 질문 + 도구 결과 + 이전 최종 답변만 전달 (오케스트레이터 계획 메시지 제외)
-    relevant = [
+    # tool_results 메시지가 여러 라운드 누적된 경우 내용을 하나로 합산
+    raw_relevant = [
         m for m in messages
         if getattr(m, "type", None) == "human"
         or getattr(m, "name", None) in ("tool_results", "final_answer")
     ]
+    tool_result_msgs = [m for m in raw_relevant if getattr(m, "name", None) == "tool_results"]
+    other_msgs       = [m for m in raw_relevant if getattr(m, "name", None) != "tool_results"]
+
+    if len(tool_result_msgs) > 1:
+        from langchain_core.messages import AIMessage as _AI
+        merged = "\n\n---\n\n".join(str(m.content) for m in tool_result_msgs)
+        relevant = other_msgs + [_AI(content=merged, name="tool_results")]
+    else:
+        relevant = raw_relevant
 
     system_prompt = """<language>Korean</language>
 
