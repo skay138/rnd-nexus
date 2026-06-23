@@ -87,7 +87,7 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
 
     t0 = time.perf_counter()
     parts: list[str] = []
-    async for chunk in llm.astream([SystemMessage(content=system_prompt)] + relevant):
+    async for chunk in llm.astream([SystemMessage(content=system_prompt)] + relevant, config):
         if chunk.content:
             parts.append(chunk.content)
     elapsed = time.perf_counter() - t0

@@ -20,6 +20,34 @@ def _task_key(task: str) -> str:
     return task.strip().lower()
 
 
+def _clean_result(result_str: str) -> str:
+    """MCP 결과에서 entity JSON을 추출해 LLM 친화적 텍스트로 변환."""
+    if result_str.startswith("[ERROR]"):
+        return result_str
+    try:
+        items = json.loads(result_str)
+    except Exception:
+        try:
+            items = ast.literal_eval(result_str)
+        except Exception:
+            return result_str
+    if not isinstance(items, list):
+        return result_str
+    entities = []
+    for item in items:
+        if not (isinstance(item, dict) and item.get("type") == "text"):
+            continue
+        try:
+            d = json.loads(item["text"])
+            if isinstance(d, list):
+                entities.extend(d)
+            else:
+                entities.append(d)
+        except Exception:
+            pass
+    return json.dumps(entities, ensure_ascii=False, indent=2) if entities else result_str
+
+
 def _fmt_result(result_str: str) -> str:
     """결과 문자열을 한 줄 요약으로."""
     if result_str.startswith("[ERROR]"):
@@ -144,7 +172,7 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     msg_lines: list[str] = []
 
     for task, tool_pairs in zip(fresh_tasks, worker_results):
-        tool_lines = [f"[{tool_name}]\n{result_str}" for tool_name, result_str in tool_pairs]
+        tool_lines = [f"[{tool_name}]\n{_clean_result(result_str)}" for tool_name, result_str in tool_pairs]
         msg_lines.append(f"# {task[:40]}\n" + "\n\n".join(tool_lines))
         for tool_name, result_str in tool_pairs:
             updated[tool_name] = updated.get(tool_name, []) + [result_str]

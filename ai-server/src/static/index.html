@@ -613,6 +613,8 @@
       var queryText = input.value.trim();
       if (!queryText) return;
 
+      taskToolsMap = {};  // 쿼리마다 초기화
+
       var btn        = document.getElementById("btn");
       btn.disabled   = true;
       btn.textContent = "처리 중…";
@@ -662,9 +664,9 @@
                 markRoundDone(payload.round - 1);
                 addRound(roundsBox, payload.round, payload.reasoning, payload.tasks || []);
                 processLines.push("[ 라운드 " + payload.round + " ]");
-                processLines.push("  reasoning: " + payload.reasoning.substring(0, 200));
+                processLines.push("  " + payload.reasoning.substring(0, 150) + (payload.reasoning.length > 150 ? "…" : ""));
                 (payload.tasks || []).forEach(function(t) {
-                  processLines.push("  ⚡ " + t.substring(0, 80));
+                  processLines.push("  ⚡ " + t.substring(0, 80) + (t.length > 80 ? "…" : ""));
                 });
                 scrollChat();
               } else if (payload.type === "task_result") {

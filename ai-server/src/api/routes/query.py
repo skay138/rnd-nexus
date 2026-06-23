@@ -173,10 +173,13 @@ async def _stream_events(
                     None,
                 )
                 if orch_msg:
+                    # msg_content = reasoning + "\n\n[계획한 태스크]..." 형식 — 순수 reasoning만 추출
+                    raw = str(orch_msg.content)
+                    reasoning_only = raw.split("\n\n[계획한 태스크]")[0].split("\n\n[수집 완료")[0]
                     yield json.dumps({
                         "type":      "orchestrator",
                         "round":     iteration_count,
-                        "reasoning": str(orch_msg.content),
+                        "reasoning": reasoning_only,
                         "tasks":     pending_tasks,
                     })
 
