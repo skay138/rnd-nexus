@@ -86,12 +86,17 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
     )
 
     t0 = time.perf_counter()
-    parts: list[str] = []
-    async for chunk in llm.astream([SystemMessage(content=system_prompt)] + relevant, config):
-        if chunk.content:
-            parts.append(chunk.content)
+    response = await llm.ainvoke([SystemMessage(content=system_prompt)] + relevant, config)
     elapsed = time.perf_counter() - t0
-    full_content = "".join(parts)
+
+    raw = response.content
+    if isinstance(raw, list):
+        full_content = "".join(
+            item["text"] for item in raw
+            if isinstance(item, dict) and item.get("type") == "text"
+        )
+    else:
+        full_content = raw or ""
 
     logger.debug("[generate] elapsed=%.2fs content_len=%d\n%s", elapsed, len(full_content), full_content[:500])
     return {"messages": [AIMessage(content=full_content, name="final_answer")]}

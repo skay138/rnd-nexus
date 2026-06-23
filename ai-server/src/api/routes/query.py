@@ -145,6 +145,8 @@ async def _stream_events(
     last_tool_results: dict    = {}
     prev_task_result_count: int = 0
     last_iteration_count: int  = 0
+    tokens_sent: bool          = False
+    last_final_answer: str     = ""
 
     try:
         async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
@@ -156,6 +158,7 @@ async def _stream_events(
                 if metadata.get("langgraph_node") == "generate":
                     content = getattr(msg_chunk, "content", "")
                     if content:
+                        tokens_sent = True
                         yield json.dumps({"type": "token", "content": content})
                 continue
 
@@ -164,6 +167,12 @@ async def _stream_events(
             tool_results    = data.get("tool_results", {})
             iteration_count = data.get("iteration_count", 0)
             pending_tasks   = data.get("pending_tasks", [])
+
+            # final_answer 추적 (토큰 미수신 시 fallback용)
+            for msg in reversed(messages):
+                if getattr(msg, "name", None) == "final_answer":
+                    last_final_answer = str(msg.content)
+                    break
 
             # 오케스트레이터 라운드 이벤트
             if iteration_count > last_iteration_count:
@@ -198,6 +207,11 @@ async def _stream_events(
     except Exception as e:
         logger.exception("agent_query 스트리밍 오류")
         yield json.dumps({"type": "error", "message": str(e)})
+
+    # 토큰이 전혀 스트림되지 않았지만 final_answer가 있으면 한번에 전송
+    if not tokens_sent and last_final_answer:
+        logger.warning("[query] 토큰 미수신 — final_answer fallback 전송 (len=%d)", len(last_final_answer))
+        yield json.dumps({"type": "token", "content": last_final_answer})
 
     references = _build_references(last_tool_results)
     yield json.dumps({"type": "done", "references": references})
