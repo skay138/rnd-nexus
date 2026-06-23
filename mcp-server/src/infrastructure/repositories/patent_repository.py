@@ -41,9 +41,25 @@ class MariaDBPatentRepository(PatentRepository):
         return [Patent(**row) for row in rows]
 
 
+    def get_by_ids(self, ids: List[str]) -> List[Patent]:
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        sql = f"SELECT * FROM patents WHERE patent_id IN ({placeholders})"
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, ids)
+                rows = cur.fetchall()
+        return [Patent(**row) for row in rows]
+
+
 class InMemoryPatentRepository(PatentRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.patents = load_fixture("patents.json", fixtures_dir)
+
+    def get_by_ids(self, ids: List[str]) -> List[Patent]:
+        id_set = set(ids)
+        return [Patent(**p) for p in self.patents if p.get("patent_id") in id_set]
 
     def search_patents(self, query: str = "", country: str = "KR", year_from: int = 0, assignee: str = "", limit: int = 10) -> List[Patent]:
         keywords = query.lower().split() if query else []

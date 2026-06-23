@@ -1,9 +1,12 @@
 from typing import Literal
+from langchain_core.runnables import RunnableConfig
 from agent.state import RDAgentState
 
 
-def should_continue(state: RDAgentState) -> Literal["tool_node", "reflection"]:
-    last = state["messages"][-1]
-    if hasattr(last, "tool_calls") and last.tool_calls:
-        return "tool_node"
-    return "reflection"
+def should_continue(state: RDAgentState, config: RunnableConfig) -> Literal["parallel_executor", "generate"]:
+    max_iterations: int = config.get("configurable", {}).get("max_replan", 3)
+    if state.get("iteration_count", 0) >= max_iterations:
+        return "generate"
+    if state.get("pending_tasks"):
+        return "parallel_executor"
+    return "generate"

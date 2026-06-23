@@ -138,7 +138,11 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         },
         "recursion_limit": 50,
     }
-    initial_state = {"messages": [HumanMessage(content=body.query)]}
+    initial_state = {
+        "messages":       [HumanMessage(content=body.query)],
+        "iteration_count": 0,
+        "tool_results":    {},
+    }
 
     return EventSourceResponse(_stream_events(graph, initial_state, lg_config))
 
@@ -148,7 +152,6 @@ async def _stream_events(
     initial_state: dict[str, Any],
     config: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    last_plan: list[str]       = []
     seen_tool_ids: set[str]    = set()
     final_content              = ""
     last_tool_results: dict    = {}
@@ -156,7 +159,6 @@ async def _stream_events(
 
     try:
         async for event in graph.astream(initial_state, config, stream_mode="values"):
-            plan         = event.get("plan", [])
             messages     = event.get("messages", [])
             tool_results = event.get("tool_results", {})
 
@@ -168,10 +170,6 @@ async def _stream_events(
                         yield json.dumps({"type": "tool_result", "tool": tool_name, "summary": summary})
                 last_tool_results = tool_results
                 prev_tool_results = {k: list(v) for k, v in tool_results.items()}
-
-            if plan and plan != last_plan:
-                yield json.dumps({"type": "plan", "steps": plan})
-                last_plan = list(plan)
 
             if not messages:
                 continue

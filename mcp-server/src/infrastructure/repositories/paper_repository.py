@@ -51,9 +51,34 @@ class MariaDBPaperRepository(PaperRepository):
         return [Paper(**row) for row in rows]
 
 
+    def get_by_ids(self, ids: List[str]) -> List[Paper]:
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        sql = f"""
+            SELECT p.paper_id, p.title, p.year, p.citations, p.journal, p.abstract, p.keywords,
+                   GROUP_CONCAT(pa.author_name ORDER BY pa.display_order SEPARATOR ', ') AS authors
+            FROM papers p
+            LEFT JOIN paper_authors pa ON pa.paper_id = p.paper_id
+            WHERE p.paper_id IN ({placeholders})
+            GROUP BY p.paper_id
+        """
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, ids)
+                rows = cur.fetchall()
+        for row in rows:
+            row["authors"] = row["authors"].split(", ") if row.get("authors") else []
+        return [Paper(**row) for row in rows]
+
+
 class InMemoryPaperRepository(PaperRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.papers = load_fixture("papers.json", fixtures_dir)
+
+    def get_by_ids(self, ids: List[str]) -> List[Paper]:
+        id_set = set(ids)
+        return [Paper(**p) for p in self.papers if p.get("paper_id") in id_set]
 
     def search_papers(self, query: str = "", year_from: int = 0, year_to: int = 0, author: str = "", limit: int = 10) -> List[Paper]:
         keywords = query.lower().split() if query else []

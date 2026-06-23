@@ -53,9 +53,33 @@ class MariaDBTechnologyRepository(TechnologyRepository):
         return [Technology(**row) for row in rows]
 
 
+    def get_by_ids(self, ids: List[str]) -> List[Technology]:
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        sql = f"""
+            SELECT t.*, GROUP_CONCAT(kp.player_name SEPARATOR ', ') AS key_players
+            FROM technologies t
+            LEFT JOIN tech_key_players kp ON kp.tech_id = t.tech_id
+            WHERE t.tech_id IN ({placeholders})
+            GROUP BY t.tech_id
+        """
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, ids)
+                rows = cur.fetchall()
+        for row in rows:
+            row["key_players"] = row["key_players"].split(", ") if row.get("key_players") else []
+        return [Technology(**row) for row in rows]
+
+
 class InMemoryTechnologyRepository(TechnologyRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.technologies = load_fixture("technologies.json", fixtures_dir)
+
+    def get_by_ids(self, ids: List[str]) -> List[Technology]:
+        id_set = set(ids)
+        return [Technology(**t) for t in self.technologies if t.get("tech_id") in id_set]
 
     def search_technologies(self, query: str = "", trl_min: int = 0, top_k: int = 10) -> List[Technology]:
         keywords = query.lower().split() if query else []

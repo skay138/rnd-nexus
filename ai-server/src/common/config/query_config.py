@@ -10,9 +10,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, ClassVar, Optional, Protocol, runtime_checkable
 
+# 순수 알고리즘 기본값만 보관 — 모델명/replan은 config.py(env)가 단일 출처
 CONFIG_DEFAULTS: dict[str, Any] = {
-    "generate_model":  "qwen2.5:7b",
-    "max_replan":      3,
     "temperature":     0.0,
     "semantic_top_k":  20,
     "dense_weight":    0.3,
@@ -69,7 +68,10 @@ class RequestConfig:
         repo:     Optional[ConfigRepository],
         override: Optional[QueryConfig] = None,
     ) -> QueryConfig:
-        """API 파라미터 > repo > 내장 기본값 순으로 완전한 QueryConfig 반환."""
+        """API 파라미터 > repo(DB) > config.py(env) > 내장 기본값 순으로 완전한 QueryConfig 반환."""
+        from config import get_settings  # 순환 import 방지용 지연 import
+        s = get_settings()
+
         o = override or QueryConfig()
 
         def _pick(key: str, api_val: Any) -> Any:
@@ -79,6 +81,11 @@ class RequestConfig:
                 val = repo.get(key)
                 if val is not None:
                     return val
+            # config.py(env) 기반 fallback — 모델명/replan은 여기서 처리
+            if key == "generate_model":
+                return s.rnd_model_generate
+            if key == "max_replan":
+                return s.rnd_max_replan
             return RequestConfig._DEFAULTS.get(key)
 
         return QueryConfig(

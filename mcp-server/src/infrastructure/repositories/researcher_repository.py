@@ -42,9 +42,25 @@ class MariaDBResearcherRepository(ResearcherRepository):
         return [Researcher(**row) for row in rows]
 
 
+    def get_by_ids(self, ids: List[str]) -> List[Researcher]:
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        sql = f"SELECT * FROM researchers WHERE researcher_id IN ({placeholders})"
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, ids)
+                rows = cur.fetchall()
+        return [Researcher(**row) for row in rows]
+
+
 class InMemoryResearcherRepository(ResearcherRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.researchers = load_fixture("researchers.json", fixtures_dir)
+
+    def get_by_ids(self, ids: List[str]) -> List[Researcher]:
+        id_set = set(ids)
+        return [Researcher(**r) for r in self.researchers if r.get("researcher_id") in id_set]
 
     def search_researchers(self, query: str = "", specialty: str = "", affiliation: str = "", top_k: int = 10) -> List[Researcher]:
         spec_lower = specialty.lower()

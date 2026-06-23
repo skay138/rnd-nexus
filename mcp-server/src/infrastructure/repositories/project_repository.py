@@ -45,9 +45,25 @@ class MariaDBProjectRepository(ProjectRepository):
         return [Project(**row) for row in rows]
 
 
+    def get_by_ids(self, ids: List[str]) -> List[Project]:
+        if not ids:
+            return []
+        placeholders = ",".join(["%s"] * len(ids))
+        sql = f"SELECT * FROM projects WHERE project_id IN ({placeholders})"
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, ids)
+                rows = cur.fetchall()
+        return [Project(**row) for row in rows]
+
+
 class InMemoryProjectRepository(ProjectRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.projects = load_fixture("projects.json", fixtures_dir)
+
+    def get_by_ids(self, ids: List[str]) -> List[Project]:
+        id_set = set(ids)
+        return [Project(**p) for p in self.projects if p.get("project_id") in id_set]
 
     def search_projects(self, keyword: str = "", institution: str = "", status: str = "", year_from: int = 0, limit: int = 10) -> List[Project]:
         keywords = keyword.lower().split() if keyword else []
