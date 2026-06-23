@@ -33,7 +33,9 @@ async def _run_worker(
     llm = ChatOllama(model=settings.rnd_model, base_url=settings.ollama_base_url)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
-    system = SystemMessage(content="""당신은 R&D 데이터 수집 워커입니다. 주어진 태스크를 완료하기 위해 도구를 사용하세요.
+    system = SystemMessage(content="""<language>Korean</language>
+
+당신은 R&D 데이터 수집 워커입니다. 주어진 태스크를 완료하기 위해 도구를 사용하세요.
 도구 결과를 분석하고 추가 정보가 필요하면 계속 호출하세요. 충분한 데이터를 수집했으면 멈추세요.
 도구 없이 데이터를 추측하거나 생성하지 마세요.""")
     messages: list = [system, HumanMessage(content=description)]

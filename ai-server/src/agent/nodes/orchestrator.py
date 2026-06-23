@@ -57,7 +57,9 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     tools_by_name   = configurable.get("tools_by_name", {})
     iteration_count = state.get("iteration_count", 0)
 
-    system_prompt = f"""당신은 R&D 데이터 수집 오케스트레이터입니다. reasoning은 한국어로 작성하세요.
+    system_prompt = f"""<language>Korean</language>
+
+당신은 R&D 데이터 수집 오케스트레이터입니다. reasoning은 한국어로 작성하세요.
 사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집하고, 완료되면 tasks=[]를 반환하세요.
 당신은 태스크를 기술하고 워커에게 위임합니다 — 도구를 직접 지정하지 마세요.
 각 워커는 태스크 설명을 보고 스스로 적합한 도구를 선택해 실행합니다.

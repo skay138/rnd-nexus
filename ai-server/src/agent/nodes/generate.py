@@ -30,16 +30,19 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         ),
     )
 
-    # 사용자 질문 + 오케스트레이터 계획 + 도구 결과 + 이전 최종 답변만 전달
+    # 사용자 질문 + 도구 결과 + 이전 최종 답변만 전달 (오케스트레이터 계획 메시지 제외)
     relevant = [
         m for m in messages
         if getattr(m, "type", None) == "human"
-        or getattr(m, "name", None) in ("orchestrator", "tool_results", "final_answer")
+        or getattr(m, "name", None) in ("tool_results", "final_answer")
     ]
 
-    system_prompt = """<role>
-당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
-대화 히스토리의 [tool_results] 메시지에 수집된 데이터가 있습니다. 이를 바탕으로 사용자 질문에 직접 답하세요.
+    system_prompt = """<language>Korean</language>
+
+<role>
+당신은 R&D 전문 AI 어시스턴트입니다. 반드시 한국어로 답변을 작성하세요.
+[tool_results] 메시지에 수집된 데이터가 있습니다. 이 데이터를 바탕으로 사용자 질문에 직접 답하세요.
+데이터가 충분하지 않더라도 수집된 내용 내에서 최선의 답변을 작성하세요.
 </role>
 
 <format_guide>

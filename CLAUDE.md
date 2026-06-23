@@ -18,7 +18,7 @@ AI 반도체 핵심 연구자를 추천해줘
 **기술 스택:**
 - Runtime: Python 3.11+, 패키지 관리: uv
 - Agent 프레임워크: LangGraph (`StateGraph`, `AsyncRedisSaver`)
-- LLM: Ollama (`qwen2.5:7b`) via `langchain-ollama`
+- LLM: Ollama (`qwen2.5:32b` 이상 권장) via `langchain-ollama`
 - MCP: `mcp>=1.28.0`, `langchain-mcp-adapters>=0.3.0` (SSE 프로토콜)
 - Memory: `AsyncRedisSaver` (`langgraph-checkpoint-redis`)
 - DB: MariaDB (선택), 미설정 시 인메모리 mock fallback
@@ -31,31 +31,32 @@ AI 반도체 핵심 연구자를 추천해줘
 
 ## 2. 아키텍처 원칙
 
-### 결정론적 인프라가 LLM을 감싼다
+### 멀티에이전트: Orchestrator → Worker Agents
 
-- **LLM이 담당:** planner(계획 수립), llm_call(tool 선택), reflection(충분성 판단), generate(최종 답변)
-- **코드가 담당:** tool_node MCP 라우팅, 루프 제어·종료, 에러 복구, Memory 관리
+- **Orchestrator:** 고수준 태스크 계획만 수립. 도구 이름·파라미터를 직접 지정하지 않음
+- **Worker Agent:** 각 태스크를 받아 어떤 도구를 어떻게 쓸지 스스로 판단 (mini ReAct loop)
+- **코드가 담당:** 루프 제어·종료, 중복 태스크 차단, 에러 격리, Memory 관리
 
-`rnd_max_replan` 초과 시 LLM 판단 없이 코드가 `sufficient`로 강제 처리합니다.
+`iteration_count >= max_replan` 초과 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
 
 ### 도구는 RunnableConfig로 주입
 
-`llm_with_tools`와 `tools_by_name`은 FastAPI lifespan에서 MCP 세션으로 동적 획득한 뒤 `config["configurable"]`로 주입됩니다. 노드 내에서 직접 import하지 않습니다.
+`tools_by_name`은 FastAPI lifespan에서 MCP 세션으로 동적 획득한 뒤 `config["configurable"]`로 주입됩니다.
 
 ```python
 # api/app.py lifespan 패턴
 async with mcp_server_session() as session:
-    llm_with_tools, tools_by_name = await get_llm_and_tools(session)
+    app.state.tools_by_name = await get_llm_and_tools(session)
     app.state.graph = build_graph(memory)
-    app.state.llm_with_tools = llm_with_tools
-    app.state.tools_by_name = tools_by_name
 ```
+
+### Messages가 Source of Truth
+
+모든 노드 간 컨텍스트는 `state["messages"]`를 통해 전달됩니다. `generate`는 `orchestrator`, `tool_results`, `final_answer` 이름의 메시지를 필터링해 사용합니다.
 
 ### Config 우선순위
 
 **API 파라미터 > MariaDB system_config > CONFIG_DEFAULTS**
-
-`RequestConfig.set_current()` 가 요청 시작 시 ContextVar에 설정합니다. 노드는 `RequestConfig.current()`로 조회합니다.
 
 ---
 
@@ -66,23 +67,28 @@ HTTP POST /agent/query  (SSE 스트리밍)
     ↓
 RequestConfig.set_current()       ← API params > MariaDB > defaults
     ↓
-planner                           ← PlanOutput (with_structured_output, JSON 강제)
+orchestrator                      ← OrchestratorPlan (with_structured_output)
+                                    고수준 태스크 목록 반환 {description, label}
     ↓
-llm_call ──┐                      ← llm_with_tools via config["configurable"]
-           ↓
-     should_continue               ← 결정론적: tool_calls 유무만 확인
-      ├─ tool_calls 있음 → tool_node → [MCP 서버 SSE] ──┐
-      └─ 없음 → reflection                              │
-                   ↓        ←────────────────────────────┘
-            ReflectionOutput (with_structured_output, JSON 강제)
-            result == "sufficient"? ──No──→ planner (replan_count += 1)
-                   ↓ Yes
-              generate                ← rnd_model_generate (config override 가능)
-                   ↓
-            SSE done 이벤트 (eval_score 포함)
+should_continue                   ← pending_tasks 유무 + iteration_count 확인
+    ├─ tasks 있음 → parallel_executor
+    └─ 없음 → generate
+         ↓
+parallel_executor                 ← 태스크별 Worker Agent 병렬 실행
+    각 Worker: ChatOllama.bind_tools() + ReAct loop (최대 5스텝)
+    의존관계 도구 호출도 워커 내부에서 자율 처리
+         ↓
+_after_executor                   ← no_new_data 또는 iteration_count >= max_replan
+    ├─ 조건 충족 → generate
+    └─ 아니면 → orchestrator
+         ↓
+generate                          ← messages 히스토리 기반 최종 답변
+    relevant: human | orchestrator | tool_results | final_answer
+         ↓
+SSE done 이벤트 (references 포함)
 ```
 
-**SSE 이벤트 타입:** `plan` | `tool_call` | `token` | `done` | `error`
+**SSE 이벤트 타입:** `orchestrator` | `tool_result` | `token` | `done` | `error`
 
 ---
 
@@ -112,18 +118,15 @@ rnd-nexus/
 │       │   ├── config_repository.py  ← MemoryConfigRepository, MariaDBConfigRepository
 │       │   └── mariadb.py            ← parse_mariadb_url()
 │       ├── agent/
-│       │   ├── graph.py       ← build_graph(memory), should_continue, should_replan
+│       │   ├── graph.py       ← build_graph(memory), should_continue, _after_executor
 │       │   ├── mcp_client.py  ← mcp_server_session(), get_llm_and_tools()
 │       │   ├── state.py       ← RDAgentState (typing_extensions.TypedDict)
 │       │   ├── nodes/
-│       │   │   ├── planner.py
-│       │   │   ├── llm_call.py
-│       │   │   ├── tool_node.py
-│       │   │   ├── reflection.py
-│       │   │   └── generate.py
+│       │   │   ├── orchestrator.py   ← 고수준 태스크 계획
+│       │   │   ├── parallel_executor.py  ← Worker Agent 병렬 실행
+│       │   │   └── generate.py       ← 최종 답변 생성
 │       │   └── edges/
-│       │       ├── should_continue.py
-│       │       └── should_replan.py
+│       │       └── should_continue.py
 │       ├── memory/
 │       │   ├── session.py     ← AsyncRedisSaver, asynccontextmanager
 │       │   └── compaction.py  ← should_compact(), compact_messages()
@@ -171,18 +174,14 @@ from typing import Annotated
 from typing_extensions import TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-import operator
 
 class RDAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
-    plan: list[str]
-    completed_steps: Annotated[list[str], operator.add]
-    reflection_result: str          # "sufficient" | "insufficient"
-    reflection_feedback: str
-    replan_count: int               # 결정론적 루프 종료 카운터
-    tool_results: dict[str, list[str]]  # 도구명 → 결과 문자열 목록
-    eval_score: float               # 0.0 ~ 1.0 (generate가 기록)
-    eval_feedback: str
+    tool_results: dict[str, list[str]]  # {tool_name: [result_str, ...]} — _build_references용
+    iteration_count: int                # 오케스트레이터 호출 횟수
+    pending_tasks: list[dict]           # [{description, label}] — 이번 라운드 실행 태스크
+    executed_tasks: list[dict]          # [{description, label}] — 코드 레벨 dedup용
+    no_new_data: bool                   # 중복 태스크만 남았을 때 generate로 단락
 ```
 
 - `typing_extensions.TypedDict` 직접 사용 (pyrefly 호환, `MessagesState` 상속 금지)
@@ -206,7 +205,7 @@ CONFIG_DEFAULTS = {
 # 우선순위: API 파라미터 > MariaDB system_config > CONFIG_DEFAULTS
 class RequestConfig:
     @classmethod
-    def set_current(cls, repo, override: QueryConfig) -> None: ...
+    def set_current(cls, resolved, original_query) -> None: ...
     @classmethod
     def current(cls) -> dict: ...  # ContextVar 기반 per-request 격리
 ```
@@ -219,63 +218,72 @@ MariaDB `system_config` 테이블 (key VARCHAR, value JSON):
 
 ## 7. 노드 설계
 
-### planner
+### orchestrator
 
 ```python
-class PlanOutput(BaseModel):
-    steps: list[str] = Field(description="수행할 단계 목록 (2-5개)")
+class TaskDescription(BaseModel):
+    description: str  # 자연어 태스크 설명 — 도구 이름·파라미터 지정 없음
+    label: str        # 로깅·UI용 레이블
 
-async def planner(state: RDAgentState) -> dict:
-    structured = llm.with_structured_output(PlanOutput)
-    # Replan 시 reflection_feedback 프롬프트에 포함
-    # 실패 시 fallback: ["관련 논문 검색", "관련 기술 추천"]
-    return {"plan": plan, "completed_steps": []}
+class OrchestratorPlan(BaseModel):
+    reasoning: str               # 수집 현황 평가 및 전략 (한국어)
+    tasks: list[TaskDescription] # 병렬 실행 태스크. 수집 완료 시 []
+
+async def orchestrator(state, config) -> dict:
+    # _build_capabilities(tools_by_name) — 동적 capabilities 주입
+    # with_structured_output(OrchestratorPlan)
+    # 실패 시: tasks=[], meaningful error reasoning 반환
+    return {"messages": [AIMessage(name="orchestrator")], "pending_tasks": tasks, "iteration_count": n}
 ```
 
-- 프롬프트에 도구 목록 없음 — 조사 방향(의도)만 기술
+- 도구 이름·파라미터를 직접 지정하지 않음 — 워커가 자율 결정
+- 대화 히스토리의 `[tool_results]` 메시지를 보고 수집 완료 여부 판단
 
-### llm_call
-
-```python
-async def llm_call(state: RDAgentState, config: RunnableConfig) -> dict:
-    llm_with_tools = config["configurable"]["llm_with_tools"]
-    # Context Compaction: 80,000 토큰 초과 시 compact_messages() 자동 실행
-```
-
-### tool_node
+### parallel_executor (Worker Agent)
 
 ```python
-async def tool_node(state: RDAgentState, config: RunnableConfig) -> dict:
-    tools_by_name = config["configurable"]["tools_by_name"]
-    # 예외 → ToolMessage("[ERROR] ...") 반환, raise 금지
-    # tool_results 캐시 업데이트
-```
+_WORKER_MAX_STEPS = 5
 
-### reflection
+async def _run_worker(task, tools_by_name, settings) -> list[tuple[str, str]]:
+    # ChatOllama.bind_tools(all_tools) + ReAct loop
+    # 도구 호출 → 결과 분석 → 추가 호출 여부 자율 판단
+    # 의존관계(semantic_search → get_entities)도 내부에서 처리
+    return [(tool_name, result_str), ...]
 
-```python
-class ReflectionOutput(BaseModel):
-    result: Literal["sufficient", "insufficient"]
-    feedback: str = Field(default="")
-
-async def reflection(state: RDAgentState) -> dict:
-    # replan_count >= rnd_max_replan → sufficient 강제 (무한루프 방지)
-    # tool_results.items() 동적 순회 — 도구명 하드코딩 없음
-    # 파싱 실패 시 sufficient 폴백
+async def parallel_executor(state, config) -> dict:
+    # _task_key(description) 기준 중복 차단
+    # asyncio.gather(*[_run_worker(t, ...) for t in fresh_tasks])
+    # tool_results[tool_name] += [result_str]
+    # AIMessage(name="tool_results") 생성
 ```
 
 ### generate
 
 ```python
-async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
-    model = config.get("configurable", {}).get("generate_model", settings.rnd_model_generate)
-    # tool_results.items() 동적 순회
-    # "SCORE: X.X" 파싱하여 eval_score 기록
+async def generate(state, config) -> dict:
+    # relevant = human | orchestrator | tool_results | final_answer 메시지만 필터
+    # state.messages 전체 DEBUG 로그
+    # ChatOllama(streaming=True) — SSE 토큰 스트리밍
+    return {"messages": [AIMessage(name="final_answer")]}
 ```
 
 ---
 
-## 8. MCP 서버 도구 목록
+## 8. MCP 클라이언트
+
+```python
+# agent/mcp_client.py
+async def get_llm_and_tools(session: ClientSession) -> dict:
+    mcp_tools = await load_mcp_tools(session)
+    tools_by_name = {t.name: t for t in mcp_tools}
+    return tools_by_name  # llm_with_tools 없음 — 워커가 자체 bind_tools
+```
+
+새 도구는 `mcp-server/src/mcp_server/server.py`에 `register_*_tools(mcp)` 추가 → 클라이언트 자동 반영.
+
+---
+
+## 9. MCP 서버 도구 목록
 
 | 도구 | 파일 | 주요 파라미터 |
 |------|------|------|
@@ -290,11 +298,9 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 | get_citation_graph | tools/graph.py | paper_title, depth — Neo4j 논문 인용 그래프 |
 | run_graph_query | tools/graph.py | cypher — Neo4j READ 전용 Cypher (WRITE 차단) |
 
-새 도구는 `mcp-server/src/mcp_server/server.py`에 `register_*_tools(mcp)` 추가 → 클라이언트 자동 반영.
-
 ---
 
-## 9. Milvus 벡터 검색
+## 10. Milvus 벡터 검색
 
 ```python
 # mcp-server/src/infrastructure/milvus.py
@@ -310,7 +316,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 
 ---
 
-## 10. Neo4j 그래프
+## 11. Neo4j 그래프
 
 **노드 레이블:** `Paper`, `Patent`, `Researcher`, `Technology`, `Project`, `Organization`
 
@@ -329,7 +335,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 
 ---
 
-## 11. Fixtures 구조
+## 12. Fixtures 구조
 
 모든 fixture 파일은 `id` (= 도메인 ID), `text` (Milvus BM25용 결합 텍스트) 필드를 포함합니다.
 
@@ -355,11 +361,11 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 
 ---
 
-## 12. 모델 설정
+## 13. 모델 설정
 
 ```python
 # src/config.py
-rnd_model: str = "qwen2.5:7b"          # planner / llm_call / reflection
+rnd_model: str = "qwen2.5:7b"          # orchestrator / worker / reflection
 rnd_model_generate: str = "qwen2.5:7b" # generate
 ollama_base_url: str = "http://localhost:11430"  # Docker 내부: 11434
 api_host: str = "0.0.0.0"
@@ -368,12 +374,14 @@ api_port: int = 8080
 
 | 노드 | 오버라이드 방법 |
 |------|----------------|
-| planner / llm_call / reflection | `.env` RND_MODEL |
+| orchestrator / worker | `.env` RND_MODEL |
 | generate | `.env` RND_MODEL_GENERATE 또는 QueryRequest.config.generate_model |
+
+> 운영 권장: `RND_MODEL=qwen2.5:32b` 이상, 고성능 환경에서는 120b급 사용
 
 ---
 
-## 13. Memory
+## 14. Memory
 
 ```python
 # src/memory/session.py
@@ -389,12 +397,45 @@ async def create_memory():
 ### Context Compaction
 
 ```python
-COMPACTION_THRESHOLD = 80_000  # 토큰 초과 시 압축 트리거
+COMPACTION_THRESHOLD = 80_000  # 토큰 초과 시 압축 트리거 (orchestrator, generate)
 ```
 
 ---
 
-## 14. 실행 방법
+## 15. 로깅 및 디버깅
+
+`RND_LOG_LEVEL=DEBUG` 설정 시 각 노드에서 상세 로그 출력:
+
+```
+[orchestrator] iter=1/3 elapsed=1.2s tasks=2
+  reasoning: ...
+  tasks: [{description: ..., label: ...}]
+
+[worker:태스크레이블] semantic_search elapsed=0.4s
+  args: {"query": "..."}
+  result: [전체 결과]
+
+[parallel_executor] 전체 2개 완료 elapsed=0.8s
+
+[generate] state.messages 전체 (7개):
+  [0] name=human ...
+  [1] name=orchestrator ...
+  [2] name=tool_results ...
+[generate] elapsed=3.1s
+```
+
+**노드별 로그 색상:**
+| 노드 | 색상 |
+|------|------|
+| orchestrator | magenta |
+| parallel_executor / worker | yellow |
+| generate | green |
+| api | bright white |
+| infrastructure | bright cyan |
+
+---
+
+## 16. 실행 방법
 
 ```bash
 # 인프라 전체 실행 (repo root에서)
@@ -433,7 +474,7 @@ asyncio.run(show())
 
 ---
 
-## 15. 환경 변수
+## 17. 환경 변수
 
 ```bash
 # AI Server
@@ -461,23 +502,22 @@ API_PORT=8080
 
 ---
 
-## 16. 코드 작성 규칙
+## 18. 코드 작성 규칙
 
 ### 금지 사항
 - `time.sleep()`으로 루프를 대기시키지 않습니다
-- `rnd_max_replan` 없이 루프를 열어두지 않습니다
+- `max_replan` 없이 루프를 열어두지 않습니다
 - State 필드를 노드 내부에서 직접 뮤테이션하지 않습니다 (항상 `return dict`)
-- `tool_node`에서 예외를 `raise`하지 않습니다 (ToolMessage로 반환)
-- SYSTEM_PROMPT에 도구 목록을 하드코딩하지 않습니다 (`bind_tools()` 스키마가 담당)
-- `generate`, `reflection`, `tool_node`에서 도구명을 하드코딩하지 않습니다 (`tool_results.items()` 사용)
+- worker에서 예외를 `raise`하지 않습니다 (`[ERROR] ...` 문자열로 반환)
+- orchestrator 프롬프트에 도구 이름·파라미터를 하드코딩하지 않습니다 (`_build_capabilities()` 사용)
 - 노드 함수를 동기(`def`)로 작성하지 않습니다 (항상 `async def`)
 - `MessagesState`를 상속하지 않습니다 (`typing_extensions.TypedDict` 직접 사용)
 - budget 관련 도구·모델·fixture를 추가하지 않습니다 (제거된 도메인)
 
 ### 필수 사항
-- 새 MCP 도구는 `mcp-server/src/mcp_server/server.py`에 추가합니다 (클라이언트 자동 반영)
-- `planner`, `reflection`의 LLM 호출은 `with_structured_output(PydanticModel)` 사용합니다
+- 새 MCP 도구는 `mcp-server/src/mcp_server/server.py`에 `register_*_tools(mcp)` 추가합니다 (클라이언트 자동 반영)
+- `orchestrator`의 LLM 호출은 `with_structured_output(OrchestratorPlan)` 사용합니다
 - `build_graph(memory)`는 항상 외부에서 memory를 주입받습니다
-- `llm_with_tools`, `tools_by_name`은 `config["configurable"]`로 주입합니다
+- `tools_by_name`은 `config["configurable"]`로 주입합니다 (`llm_with_tools` 없음)
 - Milvus/Neo4j 기능은 해당 환경변수 미설정 시 graceful degradation (None 반환, 예외 없음)
 - Config 변경은 QueryRequest의 `config` 필드로 전달하고, `RequestConfig.set_current()`로 등록합니다
