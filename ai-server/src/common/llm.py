@@ -19,7 +19,7 @@ def get_llm(model: str, streaming: bool = False, **kwargs) -> BaseChatModel:
     """
     settings = get_settings()
     provider = settings.llm_provider.lower()
-    base_url = settings.ollama_base_url
+    base_url = settings.llm_base_url
     api_key = settings.llm_api_key
     
     if provider == "ollama":

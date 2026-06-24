@@ -366,7 +366,7 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 # src/config.py
 llm_provider: str = "ollama"       # "ollama" 또는 "openai" (vLLM/Triton 호환)
 rnd_model:    str = "qwen2.5:7b"   # 최초 기동 시 모든 역할의 시드값
-ollama_base_url: str = "http://localhost:11434"  # Docker 내부: http://ollama:11434
+llm_base_url: str = "http://localhost:11434"  # Ollama: http://localhost:11434 / Triton·vLLM: http://server:8000/v1
 api_host: str = "0.0.0.0"
 api_port: int = 8080
 ```
@@ -479,7 +479,7 @@ asyncio.run(show())
 
 ```bash
 # AI Server
-OLLAMA_BASE_URL=http://localhost:11430  # Docker 내부: http://ollama:11434
+LLM_BASE_URL=http://localhost:11434   # Ollama: http://localhost:11434 / Triton·vLLM: http://server:8000/v1
 RND_MODEL=qwen2.5:7b   # 최초 기동 시 시드값 — 이후엔 /settings 에서 역할별 관리
 RND_MAX_ITERATIONS=3
 RND_LOG_LEVEL=INFO

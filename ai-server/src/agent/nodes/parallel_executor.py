@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
 from common.config.query_config import RequestConfig
 from common.parsers import summarize_tool_result
+
 from agent.state import RDAgentState
 from config import get_settings
 
@@ -57,6 +58,7 @@ async def _run_worker(
     task: str,
     tools_by_name: dict[str, Any],
     settings,
+    original_query: str = "",
 ) -> list[tuple[str, str]]:
     """
     Mini ReAct agent — 태스크 설명을 받아 필요한 도구를 스스로 선택·실행하고
@@ -66,8 +68,13 @@ async def _run_worker(
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
     system = SystemMessage(content="""당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
+[태스크]가 최우선입니다. [원본 질문]은 태스크에 키워드가 생략되거나 지시대명사가 있을 때만 보충 참고하세요.
 충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.""")
-    messages: list = [system, HumanMessage(content=task)]
+    if original_query:
+        task_content = f"[원본 질문]\n{original_query}\n\n[태스크]\n{task}"
+    else:
+        task_content = task
+    messages: list = [system, HumanMessage(content=task_content)]
     collected: list[tuple[str, str]] = []
     seen_calls: set[str] = set()
 
@@ -139,8 +146,9 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
                  _SEP, len(fresh_tasks), " | ".join(t[:30] for t in fresh_tasks))
 
     t0_all = time.perf_counter()
+    original_query = RequestConfig.current().original_query
     worker_results = await asyncio.gather(*[
-        _run_worker(t, tools_by_name, settings)
+        _run_worker(t, tools_by_name, settings, original_query)
         for t in fresh_tasks
     ])
     total_elapsed = time.perf_counter() - t0_all
