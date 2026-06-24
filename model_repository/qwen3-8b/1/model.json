@@ -3,6 +3,5 @@
   "dtype": "bfloat16",
   "gpu_memory_utilization": 0.4,
   "max_model_len": 16384,
-  "enable_tool_call": false,
   "enable_prefix_caching": true
 }
