@@ -61,6 +61,8 @@ services:
       - "8012:8002"   # Metrics
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      NCCL_P2P_DISABLE: "1"
+      NCCL_IB_DISABLE: "1"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
