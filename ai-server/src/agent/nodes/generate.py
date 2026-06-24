@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
-    model = config.get("configurable", {}).get("generate_model", settings.rnd_model_generate)
+    model = RequestConfig.current().generate_model or settings.rnd_model
     llm = get_llm(model=model, streaming=True)
 
     messages = list(state["messages"])

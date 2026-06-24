@@ -57,7 +57,6 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         "configurable": {
             "thread_id":     thread_id,
             "tools_by_name": tools_by_name,
-            "generate_model": resolved.generate_model,
             "max_iterations": resolved.max_iterations,
         },
         "recursion_limit": 50,
