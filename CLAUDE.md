@@ -142,12 +142,12 @@ rnd-nexus/
 │   └── src/
 │       ├── config.py          ← MCPSettings: mariadb_url, milvus_*, neo4j_*, sentence_transformer_model
 │       ├── mcp_server/
-│       │   ├── server.py      ← FastMCP 조립, register_*_tools() (budget 제외)
+│       │   ├── server.py      ← FastMCP 조립, register_*_tools()
 │       │   └── tools/
-│       │       ├── paper.py, patent.py, project.py
-│       │       ├── researcher.py, technology.py
-│       │       ├── vector.py  ← semantic_search() — MILVUS_HOST 미설정 시 None 반환
-│       │       └── graph.py   ← get_researcher_network(), get_citation_graph(), run_graph_query()
+│       │       ├── entities.py    ← get_entities() — ID 기반 상세 조회 (도메인 공통)
+│       │       ├── vector.py      ← semantic_search() — MILVUS_HOST 미설정 시 빈 목록 반환
+│       │       ├── graph_search.py ← semantic_graph_search() — 벡터→그래프 멀티홉
+│       │       └── graph.py       ← get_researcher_network(), get_citation_graph(), run_graph_query()
 │       └── infrastructure/
 │           ├── component_factory.py  ← RepositoryFactory 싱글톤 + Milvus/Neo4j lazy-init
 │           ├── database.py           ← ensure_schema, seed_from_fixtures
@@ -287,16 +287,14 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 
 | 도구 | 파일 | 주요 파라미터 |
 |------|------|------|
-| semantic_search | tools/vector.py | query, node_type, top_k — 단일 도메인 벡터 검색 (Milvus 필요) |
-| semantic_graph_search | tools/graph_search.py | concept, entry_type, hops, top_k — **벡터→그래프 멀티홉** (Milvus+Neo4j 필요) |
-| search_papers | tools/paper.py | query, year_from, year_to, author, limit |
-| search_patents | tools/patent.py | query, country, year_from, assignee, limit |
-| search_projects | tools/project.py | keyword, institution, status, year_from, limit |
-| search_researchers | tools/researcher.py | query, specialty, affiliation, top_k |
-| search_technologies | tools/technology.py | query, trl_min, top_k |
+| semantic_search | tools/vector.py | query, node_type, top_k, dense_weight, sparse_weight — 하이브리드 벡터 검색 (Milvus 필요) |
+| semantic_graph_search | tools/graph_search.py | query, entry_type, hops, top_k — **벡터→그래프 멀티홉** (Milvus+Neo4j 필요) |
+| get_entities | tools/entities.py | entity_type, ids — ID 기반 엔티티 상세 조회 (Researcher\|Paper\|Patent\|Technology\|Project) |
 | get_researcher_network | tools/graph.py | researcher_name — Neo4j 연구자 협업·논문·특허 네트워크 (NEO4J_URI 필요) |
 | get_citation_graph | tools/graph.py | paper_title, depth — Neo4j 논문 인용 그래프 |
 | run_graph_query | tools/graph.py | cypher — Neo4j READ 전용 Cypher (WRITE 차단) |
+
+> 도메인별 키워드 검색(search_papers 등)은 제거됨. 워커는 `semantic_search`로 ID를 수집하고 `get_entities`로 상세 조회하는 패턴을 사용합니다.
 
 ---
 

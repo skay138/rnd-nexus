@@ -64,11 +64,8 @@ async def _run_worker(
     llm = get_llm(model=settings.rnd_model)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
-    system = SystemMessage(content="""<language>한국어</language>
-
-당신은 R&D 데이터 수집 워커입니다. 주어진 태스크를 완료하기 위해 도구를 사용하세요.
-도구 결과를 분석하고 추가 정보가 필요하면 계속 도구를 호출하세요.
-목적을 달성할 만큼 충분한 데이터를 수집했거나 더 이상 조회할 내용이 없다면, 도구 호출을 멈추고 간단히 '수집 완료'라고만 출력하고 종료하세요.""")
+    system = SystemMessage(content="""당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
+충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.""")
     messages: list = [system, HumanMessage(content=task)]
     collected: list[tuple[str, str]] = []
     seen_calls: set[str] = set()

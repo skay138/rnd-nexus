@@ -32,7 +32,7 @@ def register_vector_tools(mcp: FastMCP) -> None:
             sparse_weight: Sparse BM25 가중치 (0~1, 키워드 일치 중시 시 높게)
 
         Returns:
-            [{id, node_type, name, score}, ...] — id로 후속 도구(search_papers 등)에서 상세 조회 가능
+            [{id, node_type, name, score}, ...] — id를 get_entities에 전달하여 상세 조회 가능
         """
         search_fn = repository_factory.get_vector_search_fn()
         if search_fn is None:
