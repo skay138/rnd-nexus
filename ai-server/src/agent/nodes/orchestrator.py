@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class OrchestratorPlan(BaseModel):
     reasoning: str       = Field(description="수집 현황 평가 및 다음 전략 (한국어)")
-    tasks: list[str]     = Field(description="병렬 실행할 태스크 설명 목록. 수집 완료 시 빈 리스트")
+    tasks: list[str]     = Field(description="병렬 실행할 '자연어' 태스크 지시문 목록. 수집 완료 시 빈 리스트")
 
 
 _STRATEGY = """
@@ -33,22 +33,23 @@ _STRATEGY = """
 </task_writing_guidelines>
 
 <follow_up_rule>
-tasks=[] (재검색 불필요):
-  - 이전 답변에 충분한 정보가 있고 단순 필터·정렬·요약 요청인 경우
+tasks=[] — 이미 수집된 데이터로 충분한 경우:
 
-새 조사 태스크:
-  - 이전 대화와 다른 주제이거나 추가 데이터가 필요한 경우
-  - 태스크 설명에 맥락을 충분히 포함해 워커가 독립적으로 실행 가능하게 작성
+새 태스크 필요:
+  - 수집 데이터에 없는 새 도메인·주제
+  - 추가 조사 명시 요청
+  - 이전 결과의 특정 항목 상세 조회
 </follow_up_rule>
 """
 
 
 def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
     lines = []
-    for name, tool in tools_by_name.items():
+    for tool in tools_by_name.values():
         desc = (getattr(tool, "description", "") or "").strip()
         first_line = desc.splitlines()[0] if desc else ""
-        lines.append(f"  {name}: {first_line}")
+        if first_line:
+            lines.append(f"  - {first_line}")
     return "<available_capabilities>\n" + "\n".join(lines) + "\n</available_capabilities>"
 
 
