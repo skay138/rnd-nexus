@@ -463,15 +463,6 @@
       </button>
       <div class="settings-panel" id="settings-panel">
         <div class="setting-group">
-          <label>Generate Model</label>
-          <select id="conf-model">
-            <option value="qwen2.5:7b">qwen2.5:7b</option>
-            <option value="qwen2.5:32b" selected>qwen2.5:32b</option>
-            <option value="llama3.1:8b">llama3.1:8b</option>
-            <option value="llama3.1:70b">llama3.1:70b</option>
-          </select>
-        </div>
-        <div class="setting-group">
           <label>Max Iterations</label>
           <input type="number" id="conf-replan" value="3" min="1" max="5" step="1">
         </div>
@@ -775,7 +766,7 @@
       currentRound       = 0;
 
       var config = {
-        generate_model:  document.getElementById("conf-model").value  || undefined,
+
         max_iterations:  parseInt(document.getElementById("conf-replan").value) || undefined,
         temperature:     parseFloat(document.getElementById("conf-temp").value),
         semantic_top_k:  parseInt(document.getElementById("conf-topk").value)   || undefined,
