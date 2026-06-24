@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from api.schemas import QueryRequest
 from common.config.query_config import QueryConfig, RequestConfig
@@ -155,7 +155,8 @@ async def _stream_events(
             # ── 실시간 토큰 (generate 노드에서만) ─────────────────────────────
             if mode == "messages":
                 msg_chunk, metadata = data
-                if metadata.get("langgraph_node") == "generate":
+                if (metadata.get("langgraph_node") == "generate"
+                        and isinstance(msg_chunk, AIMessageChunk)):
                     content = getattr(msg_chunk, "content", "")
                     if content:
                         tokens_sent = True

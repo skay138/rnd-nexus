@@ -21,21 +21,38 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         messages = compact_messages(messages, llm)
 
 
-    # 사용자 질문 + 도구 결과 + 이전 최종 답변만 전달 (오케스트레이터 계획 메시지 제외)
-    # tool_results 메시지가 여러 라운드 누적된 경우 내용을 하나로 합산
-    raw_relevant = [
-        m for m in messages
-        if getattr(m, "type", None) == "human"
-        or getattr(m, "name", None) in ("tool_results", "final_answer")
+    # 멀티턴: 마지막 final_answer 이후가 현재 턴
+    final_answer_indices = [
+        i for i, m in enumerate(messages)
+        if getattr(m, "name", None) == "final_answer"
     ]
-    tool_result_msgs = [m for m in raw_relevant if getattr(m, "name", None) == "tool_results"]
-    other_msgs       = [m for m in raw_relevant if getattr(m, "name", None) != "tool_results"]
+    turn_start = (final_answer_indices[-1] + 1) if final_answer_indices else 0
 
-    if tool_result_msgs:
-        merged = "\n\n---\n\n".join(str(m.content) for m in tool_result_msgs)
-        relevant = other_msgs + [HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")]
+    # 이전 턴: (사용자 질문 + 최종 답변) 쌍만 컨텍스트로
+    prev_context = [
+        m for m in messages[:turn_start]
+        if (getattr(m, "type", None) == "human" and not getattr(m, "name", None))
+        or getattr(m, "name", None) == "final_answer"
+    ]
+
+    # 현재 턴: 사용자 질문 + tool_results만
+    current_msgs = messages[turn_start:]
+    current_human = [
+        m for m in current_msgs
+        if getattr(m, "type", None) == "human" and not getattr(m, "name", None)
+    ]
+    current_tool_results = [
+        m for m in current_msgs
+        if getattr(m, "name", None) == "tool_results"
+    ]
+
+    # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록)
+    if current_tool_results:
+        merged = "\n\n---\n\n".join(str(m.content) for m in current_tool_results)
+        data_msg = HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")
+        relevant = prev_context + current_human + [data_msg]
     else:
-        relevant = other_msgs
+        relevant = prev_context + current_human
 
     system_prompt = """<language>Korean</language>
 

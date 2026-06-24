@@ -97,6 +97,7 @@ async def _run_worker(
 답변은 반드시 도구 결과에 근거해서 작성하세요.""")
     messages: list = [system, HumanMessage(content=task)]
     collected: list[tuple[str, str]] = []
+    seen_calls: set[str] = set()
 
     for step in range(_WORKER_MAX_STEPS):
         response = await llm_with_tools.ainvoke(messages)
@@ -109,6 +110,12 @@ async def _run_worker(
         for tc in response.tool_calls:
             tool_name = tc["name"]
             tool_args = tc.get("args", {})
+            call_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True, ensure_ascii=False)}"
+            if call_key in seen_calls:
+                logger.debug("[worker:%s] 중복 호출 건너뜀: %s", task[:40], call_key[:80])
+                messages.append(ToolMessage(content="[SKIP] 이미 동일한 호출 결과가 있습니다.", tool_call_id=tc["id"]))
+                continue
+            seen_calls.add(call_key)
             t0 = time.perf_counter()
             try:
                 result = await tools_by_name[tool_name].ainvoke(tool_args)
