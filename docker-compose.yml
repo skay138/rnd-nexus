@@ -62,7 +62,6 @@ services:
     shm_size: '4gb'
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-      NCCL_CUMEM_ENABLE: "0"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
@@ -76,6 +75,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
+      start_period: 600s
     deploy:
       resources:
         reservations:
