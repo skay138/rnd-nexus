@@ -1,8 +1,12 @@
 from __future__ import annotations
 import logging
+from pathlib import Path
 from typing import Optional
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# config.py 위치: mcp-server/src/config.py → parents[2] = 리포 루트
+_REPO_ROOT = Path(__file__).parents[2]
 
 
 class MCPSettings(BaseSettings):
@@ -20,7 +24,10 @@ class MCPSettings(BaseSettings):
     neo4j_username: str = "neo4j"
     neo4j_password: str = ""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=str(_REPO_ROOT / ".env"),
+        env_file_encoding="utf-8",
+    )
 
 
 _settings: MCPSettings | None = None

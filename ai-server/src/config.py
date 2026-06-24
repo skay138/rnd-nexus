@@ -1,8 +1,12 @@
 from __future__ import annotations
 import logging
+from pathlib import Path
 from typing import Optional
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# config.py 위치: ai-server/src/config.py → parents[2] = 리포 루트
+_REPO_ROOT = Path(__file__).parents[2]
 
 
 class Settings(BaseSettings):
@@ -29,7 +33,10 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8080
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=str(_REPO_ROOT / ".env"),
+        env_file_encoding="utf-8",
+    )
 
 
 _settings: Settings | None = None

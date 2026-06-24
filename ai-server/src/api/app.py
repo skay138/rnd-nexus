@@ -132,7 +132,7 @@ async def lifespan(app: FastAPI):
 
     except Exception:
         logger.exception("서버 초기화 실패")
-        yield
+        raise
 
 
 def create_app() -> FastAPI:
