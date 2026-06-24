@@ -206,8 +206,9 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379
-      LLM_BASE_URL: http://ollama:11434      # Triton 사용 시: http://triton:8000/v1
-      LLM_PROVIDER: ollama                  # Triton 사용 시: openai
+      LLM_BASE_URL: http://triton:8000/v1
+      LLM_PROVIDER: openai
+      LLM_API_KEY: EMPTY
       MCP_SERVER_URL: http://mcp-server:8000/sse
       MARIADB_URL: mysql+pymysql://rnd:rnd_password@mariadb:3306/rnd_nexus
       API_HOST: "0.0.0.0"
