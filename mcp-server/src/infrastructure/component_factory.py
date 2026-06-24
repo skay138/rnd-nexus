@@ -7,8 +7,6 @@ from domain.repositories.patent_repository import PatentRepository
 from domain.repositories.project_repository import ProjectRepository
 from domain.repositories.researcher_repository import ResearcherRepository
 from domain.repositories.technology_repository import TechnologyRepository
-from domain.repositories.budget_repository import BudgetRepository
-
 logger = logging.getLogger(__name__)
 
 class RepositoryFactory:
@@ -30,7 +28,6 @@ class RepositoryFactory:
         self._project_repo: Optional[ProjectRepository] = None
         self._researcher_repo: Optional[ResearcherRepository] = None
         self._technology_repo: Optional[TechnologyRepository] = None
-        self._budget_repo: Optional[BudgetRepository] = None
 
         # Milvus / Neo4j (lazy init)
         self._vector_search_fn: Optional[Callable] = None
@@ -88,17 +85,6 @@ class RepositoryFactory:
                 from infrastructure.repositories.technology_repository import InMemoryTechnologyRepository
                 self._technology_repo = InMemoryTechnologyRepository()
         return self._technology_repo
-
-    def get_budget_repository(self) -> BudgetRepository:
-        if self._budget_repo is None:
-            if self.is_mariadb:
-                from infrastructure.repositories.budget_repository import MariaDBBudgetRepository
-                self._budget_repo = MariaDBBudgetRepository(self.db_pool)
-            else:
-                from infrastructure.repositories.budget_repository import InMemoryBudgetRepository
-                self._budget_repo = InMemoryBudgetRepository()
-        return self._budget_repo
-
 
     # ── Milvus ────────────────────────────────────────────────────────────────
 

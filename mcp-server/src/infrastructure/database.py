@@ -157,8 +157,7 @@ def seed_from_fixtures(mariadb_url: str, fixtures_dir: str, clear: bool = False)
         with conn.cursor() as cur:
             if clear:
                 for tbl in ["paper_authors", "papers", "patents", "projects",
-                             "researchers", "tech_key_players", "technologies",
-                             "budget_yearly", "budget_domains"]:
+                             "researchers", "tech_key_players", "technologies"]:
                     cur.execute(f"DELETE FROM {tbl}")
                 logger.info("기존 시드 데이터 삭제 완료")
 
