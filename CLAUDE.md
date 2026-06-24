@@ -37,7 +37,7 @@ AI 반도체 핵심 연구자를 추천해줘
 - **Worker Agent:** 각 태스크를 받아 어떤 도구를 어떻게 쓸지 스스로 판단 (mini ReAct loop)
 - **코드가 담당:** 루프 제어·종료, 중복 태스크 차단, 에러 격리, Memory 관리
 
-`iteration_count >= max_iterations` 초과 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
+`iteration_count >= max_iterations` 도달 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
 
 ### 도구는 RunnableConfig로 주입
 
@@ -70,15 +70,15 @@ RequestConfig.set_current()       ← API params > MariaDB > defaults
 orchestrator                      ← OrchestratorPlan (with_structured_output)
                                     고수준 태스크 목록 반환 list[str]
     ↓
-should_continue                   ← pending_tasks 유무 + iteration_count 확인
+should_continue                   ← pending_tasks 유무만 확인
     ├─ tasks 있음 → parallel_executor
     └─ 없음 → generate
          ↓
 parallel_executor                 ← 태스크별 Worker Agent 병렬 실행
-    각 Worker: ChatOllama.bind_tools() + ReAct loop (최대 5스텝)
+    각 Worker: get_llm().bind_tools() + ReAct loop (최대 5스텝)
     의존관계 도구 호출도 워커 내부에서 자율 처리
          ↓
-_after_executor                   ← no_new_data 또는 iteration_count >= max_iterations
+_after_executor                   ← iteration_count >= max_iterations
     ├─ 조건 충족 → generate
     └─ 아니면 → orchestrator
          ↓
@@ -112,8 +112,10 @@ rnd-nexus/
 │       │       ├── health.py  ← GET /health
 │       │       └── query.py   ← POST /agent/query (SSE 스트리밍)
 │       ├── common/
-│       │   └── config/
-│       │       └── query_config.py  ← CONFIG_DEFAULTS, QueryConfig, RequestConfig (ContextVar)
+│       │   ├── config/
+│       │   │   └── query_config.py  ← CONFIG_DEFAULTS, QueryConfig, RequestConfig (ContextVar)
+│       │   ├── llm.py               ← get_llm() 팩토리 (ollama / openai 호환 서버)
+│       │   └── parsers.py           ← iter_entities(), item_to_ref(), summarize_tool_result()
 │       ├── infrastructure/
 │       │   ├── config_repository.py  ← MemoryConfigRepository, MariaDBConfigRepository
 │       │   └── mariadb.py            ← parse_mariadb_url()
@@ -125,8 +127,10 @@ rnd-nexus/
 │       │   │   ├── orchestrator.py   ← 고수준 태스크 계획
 │       │   │   ├── parallel_executor.py  ← Worker Agent 병렬 실행
 │       │   │   └── generate.py       ← 최종 답변 생성
-│       │   └── edges/
-│       │       └── should_continue.py
+│       │   ├── edges/
+│       │   │   └── should_continue.py
+│       │   └── utils/
+│       │       └── context.py        ← get_turn_context() 멀티턴 경계 분리
 │       ├── memory/
 │       │   ├── session.py     ← AsyncRedisSaver, asynccontextmanager
 │       │   └── compaction.py  ← should_compact(), compact_messages()
@@ -151,8 +155,8 @@ rnd-nexus/
 │           ├── neo4j.py              ← make_graph_query_fn(), make_fetch_*_fn()
 │           └── repositories/         ← MariaDB/InMemory 구현체 (각 도메인)
 ├── domain/                    ← 공유 도메인 모델
-│   ├── entities/              ← Paper, Patent, Project, Researcher, Technology
-│   └── repositories/          ← Protocol 인터페이스
+│   ├── entities/              ← Paper, Patent, Project, Researcher, Technology (budget 제외)
+│   └── repositories/          ← Protocol 인터페이스 (budget 제외)
 ├── data/fixtures/             ← 인메모리 fallback JSON + Milvus/Neo4j 시딩 소스
 │   ├── papers.json            ← id, text, cites 필드 포함
 │   ├── patents.json           ← id, text 필드 포함
@@ -181,7 +185,7 @@ class RDAgentState(TypedDict):
     iteration_count: int                # 오케스트레이터 호출 횟수
     pending_tasks: list[str]            # 이번 라운드 실행 태스크 설명 목록
     executed_tasks: list[str]           # 코드 레벨 dedup용 (실행된 태스크 설명)
-    no_new_data: bool                   # 중복 태스크만 남았을 때 generate로 단락
+    task_results: list[dict]            # [{round, task, tools:[{name,summary}]}] — UI per-task 표시용
 ```
 
 - `typing_extensions.TypedDict` 직접 사용 (pyrefly 호환, `MessagesState` 상속 금지)
@@ -241,25 +245,25 @@ async def orchestrator(state, config) -> dict:
 _WORKER_MAX_STEPS = 5
 
 async def _run_worker(task: str, tools_by_name, settings) -> list[tuple[str, str]]:
-    # ChatOllama.bind_tools(all_tools) + ReAct loop
+    # get_llm().bind_tools(all_tools) + ReAct loop
+    # seen_calls 기반 동일 (tool, args) 중복 호출 차단
     # 도구 호출 → 결과 분석 → 추가 호출 여부 자율 판단
-    # 의존관계(semantic_search → get_entities)도 내부에서 처리
     return [(tool_name, result_str), ...]
 
 async def parallel_executor(state, config) -> dict:
-    # _task_key(task) 기준 중복 차단 (executed_tasks: list[str])
+    # _task_key(task) 기준 중복 태스크 차단 (executed_tasks: list[str])
     # asyncio.gather(*[_run_worker(t, ...) for t in fresh_tasks])
     # tool_results[tool_name] += [result_str]
-    # AIMessage(name="tool_results") 생성
+    # AIMessage(name="tool_results") + task_results 생성
 ```
 
 ### generate
 
 ```python
 async def generate(state, config) -> dict:
-    # relevant = human | orchestrator | tool_results | final_answer 메시지만 필터
-    # state.messages 전체 DEBUG 로그
-    # ChatOllama(streaming=True) — SSE 토큰 스트리밍
+    # get_turn_context() 로 멀티턴 경계 분리 (마지막 final_answer 이후 = 현재 턴)
+    # tool_results → HumanMessage 변환 (로컬 LLM Human→AI 교차 구조 보장)
+    # get_llm(streaming=True) — SSE 토큰 스트리밍
     return {"messages": [AIMessage(name="final_answer")]}
 ```
 
@@ -361,9 +365,10 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 
 ```python
 # src/config.py
-rnd_model: str = "qwen2.5:7b"          # orchestrator / worker / reflection
+llm_provider: str = "ollama"            # "ollama" 또는 "openai" (vLLM/Triton 호환)
+rnd_model: str = "qwen2.5:7b"          # orchestrator / worker
 rnd_model_generate: str = "qwen2.5:7b" # generate
-ollama_base_url: str = "http://localhost:11430"  # Docker 내부: 11434
+ollama_base_url: str = "http://localhost:11434"  # Docker 내부: http://ollama:11434
 api_host: str = "0.0.0.0"
 api_port: int = 8080
 ```

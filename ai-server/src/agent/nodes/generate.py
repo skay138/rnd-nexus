@@ -1,8 +1,9 @@
 import logging
 import time
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_ollama import ChatOllama
+from common.llm import get_llm
+from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
 from config import get_settings
 from memory.compaction import should_compact, compact_messages
@@ -13,30 +14,23 @@ logger = logging.getLogger(__name__)
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     model = config.get("configurable", {}).get("generate_model", settings.rnd_model_generate)
-    llm = ChatOllama(model=model, base_url=settings.ollama_base_url, streaming=True)
+    llm = get_llm(model=model, streaming=True)
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
+    compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        messages = compact_messages(messages, llm)
+        llm_plain = get_llm(model=model)
+        compacted = await compact_messages(messages, llm_plain)
+        # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
+        kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
+        compaction_msgs = [RemoveMessage(id=m.id) for m in messages if getattr(m, "id", None) and m.id not in kept_ids]
+        # 새롭게 생성된 요약 메시지(compacted[0])만 상태에 추가
+        compaction_msgs.append(compacted[0])
+        messages = compacted
 
 
-    # 멀티턴: 마지막 final_answer 이후가 현재 턴
-    final_answer_indices = [
-        i for i, m in enumerate(messages)
-        if getattr(m, "name", None) == "final_answer"
-    ]
-    turn_start = (final_answer_indices[-1] + 1) if final_answer_indices else 0
-
-    # 이전 턴: (사용자 질문 + 최종 답변) 쌍만 컨텍스트로
-    prev_context = [
-        m for m in messages[:turn_start]
-        if (getattr(m, "type", None) == "human" and not getattr(m, "name", None))
-        or getattr(m, "name", None) == "final_answer"
-    ]
-
-    # 현재 턴: 사용자 질문 + tool_results만
-    current_msgs = messages[turn_start:]
+    prev_context, turn_start, current_msgs = get_turn_context(messages)
     current_human = [
         m for m in current_msgs
         if getattr(m, "type", None) == "human" and not getattr(m, "name", None)
@@ -59,12 +53,12 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 <role>
 당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
 [tool_results] 메시지에 수집된 데이터가 있습니다. 이 데이터를 바탕으로 사용자 질문에 직접 답하세요.
-데이터가 충분하지 않더라도 수집된 내용 내에서 최선의 답변을 작성하세요.
 </role>
 
 <format_guide>
 질문 유형별 답변 형식:
-- 연구자·기술 추천: 이름/TRL → 소속/분야 → 추천 근거 순으로 번호 목록 작성
+- 연구자 추천: 이름 → 소속/전문분야 → 추천 근거 순으로 번호 목록 작성
+- 기술 추천: 기술명/TRL → 분야 → 추천 근거 순으로 번호 목록 작성
 - 목록 조회: 번호 매긴 목록, 각 항목에 핵심 속성(기관, 연도, 분야 등) 포함
 - 동향·분석: 핵심 인사이트 먼저, 뒷받침 데이터 후술
 - 상세 조회: 항목별 구조화 출력 (이름, 소속, 전문분야, 관련 논문/특허 등)
@@ -125,4 +119,4 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
         full_content = raw or ""
 
     logger.debug("[generate] elapsed=%.2fs content_len=%d\n%s", elapsed, len(full_content), full_content[:500])
-    return {"messages": [AIMessage(content=full_content, name="final_answer")]}
+    return {"messages": compaction_msgs + [AIMessage(content=full_content, name="final_answer")]}

@@ -1,9 +1,11 @@
 import logging
 import time
 from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, AIMessage
+from typing import Any, cast
+from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_ollama import ChatOllama
+from common.llm import get_llm
+from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
 from config import get_settings
 from memory.compaction import should_compact, compact_messages
@@ -35,7 +37,9 @@ tasks=[] (재검색 불필요):
 """
 
 
-def _build_capabilities(tools_by_name: dict) -> str:
+from typing import Any
+
+def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
     lines = []
     for name, tool in tools_by_name.items():
         desc = (getattr(tool, "description", "") or "").strip()
@@ -46,10 +50,10 @@ def _build_capabilities(tools_by_name: dict) -> str:
 
 async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
-    configurable    = config.get("configurable", {})
-    max_iterations  = configurable.get("max_iterations", 3)
-    tools_by_name   = configurable.get("tools_by_name", {})
-    iteration_count = state.get("iteration_count", 0)
+    configurable: dict[str, Any] = config.get("configurable", {})
+    max_iterations: int = configurable.get("max_iterations", 3)
+    tools_by_name: dict[str, Any] = configurable.get("tools_by_name", {})
+    iteration_count: int = state.get("iteration_count", 0)
 
     system_prompt = f"""<language>Korean</language>
 
@@ -63,24 +67,43 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
 <constraints>
 - 현재 라운드: {iteration_count + 1} / {max_iterations}
-- 대화 히스토리에서 이미 다룬 주제의 태스크는 재지시하지 마세요
+- 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요
 - 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요
 </constraints>"""
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
+    compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        llm_plain = ChatOllama(model=settings.rnd_model, base_url=settings.ollama_base_url)
-        messages = compact_messages(messages, llm_plain)
+        llm_plain = get_llm(model=settings.rnd_model)
+        compacted = await compact_messages(messages, llm_plain)
+        # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
+        kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
+        compaction_msgs = [RemoveMessage(id=m.id) for m in messages if getattr(m, "id", None) and m.id not in kept_ids]
+        # 새롭게 생성된 요약 메시지(compacted[0])만 상태에 추가
+        compaction_msgs.append(compacted[0])
+        messages = compacted
 
-    llm = ChatOllama(model=settings.rnd_model, base_url=settings.ollama_base_url)
+    prev_context, turn_start, current_msgs = get_turn_context(messages)
+    formatted_current = []
+    for m in current_msgs:
+        if getattr(m, "name", None) == "tool_results":
+            formatted_current.append(
+                HumanMessage(content=f"[수집된 데이터]\n{m.content}", name="tool_results")
+            )
+        else:
+            formatted_current.append(m)
+
+    relevant_messages = prev_context + formatted_current
+
+    llm = get_llm(model=settings.rnd_model)
     structured = llm.with_structured_output(OrchestratorPlan)
 
     t0 = time.perf_counter()
     try:
-        plan: OrchestratorPlan = await structured.ainvoke(
-            [SystemMessage(content=system_prompt)] + messages
-        )
+        plan = cast(OrchestratorPlan, await structured.ainvoke(
+            [SystemMessage(content=system_prompt)] + relevant_messages
+        ))
         tasks = plan.tasks
         reasoning = plan.reasoning
     except Exception as e:
@@ -103,7 +126,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     )
 
     return {
-        "messages":        [AIMessage(content=msg_content, name="orchestrator")],
+        "messages":        compaction_msgs + [AIMessage(content=msg_content, name="orchestrator")],
         "pending_tasks":   tasks,
         "iteration_count": iteration_count + 1,
     }

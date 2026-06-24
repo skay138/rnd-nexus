@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # LLM
+    llm_provider: str = "ollama"  # "ollama" 또는 "openai" (Triton/vLLM 지원)
+    llm_api_key: Optional[str] = None
     ollama_base_url: str = "http://localhost:11434"
     rnd_model: str = "qwen2.5:7b"
     rnd_model_generate: str = "qwen2.5:7b"

@@ -16,71 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _item_to_ref(d: dict) -> "dict | None":
-    if "paper_id" in d:
-        return {"type": "논문", "id": d["paper_id"], "title": d.get("title", "")}
-    if "patent_id" in d:
-        return {"type": "특허", "id": d["patent_id"], "title": d.get("title", "")}
-    if "researcher_id" in d:
-        return {"type": "연구자", "id": d["researcher_id"], "title": d.get("name", "")}
-    if "technology_id" in d:
-        return {"type": "기술", "id": d["technology_id"], "title": d.get("name", "")}
-    if "project_id" in d:
-        return {"type": "과제", "id": d["project_id"], "title": d.get("title", d.get("name", ""))}
-    if "node_type" in d:
-        return {
-            "type": d["node_type"],
-            "id": str(d.get("id", "") or d.get("entity_id", "")),
-            "title": d.get("name", d.get("title", "")),
-        }
-    return None
-
-
-def _try_parse(s: str):
-    """JSON 우선, 실패 시 ast.literal_eval로 파싱."""
-    try:
-        return json.loads(s)
-    except Exception:
-        pass
-    try:
-        return ast.literal_eval(s)
-    except Exception:
-        return None
-
-
-def _iter_entities(result_str: str):
-    """tool result 문자열에서 entity dict를 순서대로 yield."""
-    if str(result_str).startswith("[ERROR]"):
-        return
-    items = _try_parse(str(result_str))
-    if not isinstance(items, list):
-        return
-    for item in items:
-        if not isinstance(item, dict) or item.get("type") != "text":
-            continue
-        data = _try_parse(item.get("text", ""))
-        if data is None:
-            continue
-        for d in (data if isinstance(data, list) else [data])[:5]:
-            if isinstance(d, dict):
-                yield d
-
-
-def _summarize_result(result_str: str) -> str:
-    if str(result_str).startswith("[ERROR]"):
-        return "오류"
-    entities = list(_iter_entities(result_str))
-    if not entities:
-        return "결과 있음"
-    previews = []
-    for d in entities[:3]:
-        label = str(d.get("name") or d.get("title") or d.get("id") or "")[:25]
-        score = d.get("score")
-        if score is not None:
-            label += f"({score:.2f})"
-        if label:
-            previews.append(label)
-    return f"{len(entities)}건" + (f": {', '.join(previews)}" if previews else "")
+from common.parsers import item_to_ref, iter_entities
 
 
 def _build_references(tool_results: dict) -> list:
@@ -88,8 +24,8 @@ def _build_references(tool_results: dict) -> list:
     seen: set = set()
     for results in tool_results.values():
         for result_str in results:
-            for d in _iter_entities(result_str):
-                ref = _item_to_ref(d)
+            for d in iter_entities(result_str):
+                ref = item_to_ref(d)
                 if ref and ref["id"] and ref["id"] not in seen:
                     seen.add(ref["id"])
                     ref["num"] = len(refs) + 1
@@ -131,7 +67,6 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         "iteration_count": 0,
         "tool_results":    {},
         "executed_tasks":  [],
-        "no_new_data":     False,
     }
 
     return EventSourceResponse(_stream_events(graph, initial_state, lg_config))

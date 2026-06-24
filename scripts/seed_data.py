@@ -21,8 +21,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
-from typing import Any
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -67,6 +65,7 @@ def load_fixtures() -> dict[str, list[dict]]:
 def seed_mariadb(mariadb_url: str, clear: bool) -> None:
     print("\n[MariaDB] Seeding...")
     try:
+        # pyrefly: ignore [missing-import]
         from infrastructure.database import ensure_schema, seed_from_fixtures
     except ImportError as e:
         print(f"[MariaDB] Skipping - missing dependency: {e}")
@@ -98,6 +97,7 @@ def seed_milvus(
         print(f"[Milvus] Skipping - missing dependency: {e}")
         return
 
+    # pyrefly: ignore [missing-import]
     from infrastructure.milvus import ensure_collection
 
     client = MilvusClient(uri="http://" + host + ":" + str(port))
