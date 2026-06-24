@@ -59,11 +59,10 @@ services:
       - "8010:8000"   # HTTP — OpenAI-compat /v1/chat/completions
       - "8011:8001"   # gRPC
       - "8012:8002"   # Metrics
+    shm_size: '4gb'
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-      NCCL_P2P_DISABLE: "1"
-      NCCL_IB_DISABLE: "1"
-      VLLM_USE_V1: "0"
+      NCCL_CUMEM_ENABLE: "0"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
