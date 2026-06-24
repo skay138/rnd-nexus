@@ -61,12 +61,12 @@ services:
       - "8012:8002"   # Metrics
     volumes:
       - ./model_repository:/models
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
     command: >
       tritonserver
       --model-repository=/models
       --model-control-mode=explicit
       --load-model=qwen3-32b
-      --load-model=qwen3-8b
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
       interval: 30s
