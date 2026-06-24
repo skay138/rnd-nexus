@@ -4,5 +4,6 @@
   "tensor_parallel_size": 2,
   "gpu_memory_utilization": 0.9,
   "max_model_len": 32768,
-  "enable_prefix_caching": true
+  "enable_prefix_caching": true,
+  "enforce_eager": true
 }
