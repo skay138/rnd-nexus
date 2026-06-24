@@ -63,6 +63,7 @@ services:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
       NCCL_P2P_DISABLE: "1"
       NCCL_IB_DISABLE: "1"
+      VLLM_USE_V1: "0"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
