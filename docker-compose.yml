@@ -63,6 +63,7 @@ services:
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
       NCCL_SOCKET_IFNAME: "lo"
+      NCCL_DEBUG: "INFO"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
