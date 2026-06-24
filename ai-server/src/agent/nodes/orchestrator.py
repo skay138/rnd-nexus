@@ -22,9 +22,15 @@ _STRATEGY = """
 <strategy>
 - 독립적인 조사 태스크는 같은 라운드에 묶어 병렬 실행 (예: "논문 조사"와 "특허 동향 분석")
 - 워커가 내부에서 도구 순서를 스스로 결정하므로 의존관계 태스크도 하나의 태스크로 기술 가능
-  (예: "관련 논문을 찾고 해당 저자의 연구자 네트워크를 파악해라" → 워커가 알아서 처리)
+  (예: "AI 반도체 분야 핵심 논문을 찾고 저자의 연구자 네트워크를 파악해라" → 워커가 알아서 처리)
 - 대화 히스토리의 [tool_results] 메시지를 보고 이미 충분한 데이터가 있으면 tasks=[]로 수집 종료
+- 워커는 서로 완전히 독립적으로 병렬 실행되므로, 다른 워커의 태스크를 참조할 수 없습니다.
 </strategy>
+
+<task_writing_guidelines>
+- "관련된 주제", "해당 기술", "위에서 찾은"과 같은 지시 대명사나 문맥 의존적인 표현을 절대 사용하지 마세요.
+- 각 태스크는 그 자체로 완전한 문맥(구체적인 키워드, 도메인, 목적 등)을 포함해야 합니다.
+</task_writing_guidelines>
 
 <follow_up_rule>
 tasks=[] (재검색 불필요):
@@ -36,8 +42,6 @@ tasks=[] (재검색 불필요):
 </follow_up_rule>
 """
 
-
-from typing import Any
 
 def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
     lines = []
@@ -55,9 +59,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     tools_by_name: dict[str, Any] = configurable.get("tools_by_name", {})
     iteration_count: int = state.get("iteration_count", 0)
 
-    system_prompt = f"""<language>Korean</language>
-
-당신은 R&D 데이터 수집 오케스트레이터입니다. 답변은 한국어로 작성하세요.
+    system_prompt = f"""당신은 R&D 데이터 수집 오케스트레이터입니다. 답변은 한국어로 작성하세요.
 사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집하고, 완료되면 tasks=[]를 반환하세요.
 당신은 태스크를 기술하고 워커에게 위임합니다 — 도구를 직접 지정하지 마세요.
 각 워커는 태스크 설명을 보고 스스로 적합한 도구를 선택해 실행합니다.
@@ -68,7 +70,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 <constraints>
 - 현재 라운드: {iteration_count + 1} / {max_iterations}
 - 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요
-- 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요
+- 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요.
 </constraints>"""
 
     messages = list(state["messages"])
