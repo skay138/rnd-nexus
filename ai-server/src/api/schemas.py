@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -22,3 +22,9 @@ class HealthResponse(BaseModel):
     status:          str
     mcp_connected:   bool
     redis_connected: bool
+
+
+class ConfigPatchRequest(BaseModel):
+    updates: dict[str, Any]
+
+    model_config = {"arbitrary_types_allowed": True}

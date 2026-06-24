@@ -3,6 +3,7 @@ import time
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
+from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
 from config import get_settings
@@ -20,7 +21,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
     compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=model)
+        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
         compacted = await compact_messages(messages, llm_plain)
         # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
         kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
@@ -63,6 +64,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 - 동향·분석: 핵심 인사이트 먼저, 뒷받침 데이터 후술
 - 상세 조회: 항목별 구조화 출력 (이름, 소속, 전문분야, 관련 논문/특허 등)
 데이터가 없는 항목은 "정보 없음"으로 명시하세요.
+각 정보는 한 번만 작성하세요 — 같은 내용을 다른 섹션에서 반복하지 마세요.
 출처 표기나 참고문헌 목록은 작성하지 마세요 — 시스템이 자동으로 추가합니다.
 </format_guide>
 

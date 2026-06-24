@@ -10,8 +10,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"  # "ollama" 또는 "openai" (Triton/vLLM 지원)
     llm_api_key: Optional[str] = None
     ollama_base_url: str = "http://localhost:11434"
-    rnd_model: str = "qwen2.5:7b"
-    rnd_model_generate: str = "qwen2.5:7b"
+    rnd_model: str = "qwen2.5:7b"  # 최초 기동 시 모든 역할의 시드값 — 이후엔 /settings(DB)에서 관리
 
     # Agent 제어
     rnd_max_iterations: int = 3

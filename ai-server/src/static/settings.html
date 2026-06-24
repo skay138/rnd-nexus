@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&D Nexus — 설정</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0f0f1a;
+    --surface:  #1a1a2e;
+    --border:   #2a2a4a;
+    --purple:   #7c3aed;
+    --purple-l: #9d5cf6;
+    --text:     #e2e8f0;
+    --muted:    #94a3b8;
+    --success:  #22c55e;
+    --error:    #ef4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ─────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 18px;
+    line-height: 1;
+    transition: color .15s;
+  }
+  header a:hover { color: var(--text); }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header span { color: var(--muted); font-size: 13px; }
+
+  /* ── Layout ─────────────────────────────────────────── */
+  main {
+    max-width: 720px;
+    margin: 32px auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Section ─────────────────────────────────────────── */
+  .section {
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(124,58,237,.08);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--purple-l);
+  }
+  .section-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── Field ─────────────────────────────────────────── */
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'Consolas', monospace;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus { border-color: var(--purple); }
+  input::placeholder { color: #4a4a6a; }
+
+  .hint { font-size: 11px; color: #5a5a7a; }
+
+  /* ── Actions ─────────────────────────────────────────── */
+  .actions {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding: 14px 24px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+  }
+
+  button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button:active { opacity: .7; }
+
+  .btn-save {
+    background: var(--purple);
+    color: #fff;
+  }
+  .btn-reload {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* ── Toast ─────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    top: 20px; right: 20px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.ok  { background: rgba(34,197,94,.15); border: 1px solid var(--success); color: var(--success); }
+  #toast.err { background: rgba(239,68,68,.15);  border: 1px solid var(--error);  color: var(--error); }
+
+  .loading { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/" title="메인으로">←</a>
+  <h1>R&D Nexus</h1>
+  <span>/ 설정</span>
+</header>
+
+<main id="main">
+  <div class="loading">설정 불러오는 중...</div>
+</main>
+
+<div class="actions">
+  <button class="btn-reload" onclick="loadConfig()">새로고침</button>
+  <button class="btn-save" onclick="saveConfig()">저장</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api/v1/admin/config';
+
+const SCHEMA = [
+  {
+    title: '🤖 모델 설정',
+    fields: [
+      { key: 'orchestrator_model', label: 'Orchestrator 모델', type: 'text',   hint: '태스크 계획 수립 (권장: qwen2.5:32b)' },
+      { key: 'worker_model',       label: 'Worker 모델',       type: 'text',   hint: '도구 호출 워커 (권장: qwen2.5:32b)' },
+      { key: 'generate_model',     label: 'Generate 모델',     type: 'text',   hint: '최종 답변 생성 (권장: qwen2.5:32b+)' },
+      { key: 'compact_model',      label: 'Compact 모델',      type: 'text',   hint: '컨텍스트 압축 — 요약 전용 (권장: qwen2.5:7b)' },
+    ],
+  },
+  {
+    title: '⚙️ 에이전트 설정',
+    fields: [
+      { key: 'max_iterations', label: '최대 라운드', type: 'number', hint: 'Orchestrator 최대 반복 횟수 (기본: 3)', min: 1, max: 10 },
+      { key: 'temperature',    label: 'Temperature', type: 'number', hint: 'LLM 창의성 (0.0 = 결정적, 1.0 = 창의적)', step: '0.1', min: 0, max: 2 },
+    ],
+  },
+  {
+    title: '🔍 검색 설정',
+    fields: [
+      { key: 'semantic_top_k', label: 'Semantic Top-K', type: 'number', hint: 'Milvus 검색 반환 결과 수 (기본: 20)', min: 1, max: 100 },
+      { key: 'dense_weight',   label: 'Dense 가중치',   type: 'number', hint: '의미 유사도 가중치 (기본: 0.3)', step: '0.1', min: 0, max: 1 },
+      { key: 'sparse_weight',  label: 'Sparse 가중치',  type: 'number', hint: 'BM25 키워드 가중치 (기본: 0.7)', step: '0.1', min: 0, max: 1 },
+    ],
+  },
+];
+
+let current = {};
+
+async function loadConfig() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    current = await res.json();
+    renderForm(current);
+  } catch (e) {
+    document.getElementById('main').innerHTML =
+      `<div class="loading" style="color:#ef4444">설정 로드 실패: ${e.message}</div>`;
+  }
+}
+
+function renderForm(data) {
+  const main = document.getElementById('main');
+  main.innerHTML = SCHEMA.map(section => `
+    <div class="section">
+      <div class="section-header">${section.title}</div>
+      <div class="section-body">
+        ${chunk(section.fields, 2).map(row => `
+          <div class="field-row">
+            ${row.map(f => `
+              <div class="field">
+                <label>${f.label}</label>
+                <input
+                  id="field-${f.key}"
+                  type="${f.type}"
+                  value="${data[f.key] ?? ''}"
+                  placeholder="${f.hint}"
+                  ${f.step  ? `step="${f.step}"`   : ''}
+                  ${f.min !== undefined ? `min="${f.min}"` : ''}
+                  ${f.max !== undefined ? `max="${f.max}"` : ''}
+                >
+                <span class="hint">${f.hint}</span>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function saveConfig() {
+  const updates = {};
+  for (const section of SCHEMA) {
+    for (const f of section.fields) {
+      const el = document.getElementById(`field-${f.key}`);
+      if (!el) continue;
+      const raw = el.value.trim();
+      if (raw === '') continue;
+      updates[f.key] = f.type === 'number' ? Number(raw) : raw;
+    }
+  }
+
+  try {
+    const res = await fetch(API, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    current = await res.json();
+    toast('설정이 저장되었습니다.', 'ok');
+  } catch (e) {
+    toast(`저장 실패: ${e.message}`, 'err');
+  }
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  setTimeout(() => { el.className = ''; }, 2800);
+}
+
+loadConfig();
+</script>
+</body>
+</html>

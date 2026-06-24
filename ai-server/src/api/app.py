@@ -15,7 +15,7 @@ from agent.graph import build_graph
 from agent.mcp_client import mcp_server_session, get_llm_and_tools
 from memory.session import create_memory
 from infrastructure.config_repository import make_config_repo
-from api.routes import health, query
+from api.routes import health, query, admin
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("R&D Nexus API 서버 시작 중...")
 
-    app.state.config_repo     = make_config_repo(settings.mariadb_url)
+    model_defaults = {
+        "orchestrator_model": settings.rnd_model,
+        "worker_model":       settings.rnd_model,
+        "generate_model":     settings.rnd_model,
+        "compact_model":      settings.rnd_model,
+    }
+    app.state.config_repo     = make_config_repo(settings.mariadb_url, overrides=model_defaults)
     app.state.mcp_connected   = False
     app.state.redis_connected = False
 
@@ -139,6 +145,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(query.router,  prefix="/api/v1")
+    app.include_router(admin.router,  prefix="/api/v1")
 
     if _STATIC.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
@@ -146,5 +153,9 @@ def create_app() -> FastAPI:
         @app.get("/")
         async def index() -> FileResponse:
             return FileResponse(str(_STATIC / "index.html"))
+
+        @app.get("/settings")
+        async def settings_page() -> FileResponse:
+            return FileResponse(str(_STATIC / "settings.html"))
 
     return app

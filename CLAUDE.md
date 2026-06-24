@@ -203,10 +203,9 @@ CONFIG_DEFAULTS = {
     "dense_weight":   0.3,
     "sparse_weight":  0.7,
 }
-# max_iterations / generate_model 은 config.py(env) 에서 fallback
-# rnd_max_iterations: int = 3  (Settings)
+# 모델명·max_iterations는 DB → config.py(env) 순으로 fallback
 
-# 우선순위: API 파라미터 > MariaDB system_config > CONFIG_DEFAULTS
+# 우선순위: API 파라미터 > MariaDB system_config > config.py(env) > CONFIG_DEFAULTS
 class RequestConfig:
     @classmethod
     def set_current(cls, resolved, original_query) -> None: ...
@@ -217,6 +216,8 @@ class RequestConfig:
 MariaDB `system_config` 테이블 (key VARCHAR, value JSON):
 - `MARIADB_URL` 설정 시 자동 생성·사용
 - 미설정 시 `MemoryConfigRepository` (프로세스 메모리) fallback
+- 저장 키: `orchestrator_model`, `worker_model`, `generate_model`, `compact_model`, `max_iterations`, `temperature`, `semantic_top_k`, `dense_weight`, `sparse_weight`
+- `/settings` 페이지 또는 `PATCH /api/v1/admin/config`로 재기동 없이 변경 가능
 
 ---
 
@@ -363,20 +364,21 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 
 ```python
 # src/config.py
-llm_provider: str = "ollama"            # "ollama" 또는 "openai" (vLLM/Triton 호환)
-rnd_model: str = "qwen2.5:7b"          # orchestrator / worker
-rnd_model_generate: str = "qwen2.5:7b" # generate
+llm_provider: str = "ollama"       # "ollama" 또는 "openai" (vLLM/Triton 호환)
+rnd_model:    str = "qwen2.5:7b"   # 최초 기동 시 모든 역할의 시드값
 ollama_base_url: str = "http://localhost:11434"  # Docker 내부: http://ollama:11434
 api_host: str = "0.0.0.0"
 api_port: int = 8080
 ```
 
-| 노드 | 오버라이드 방법 |
-|------|----------------|
-| orchestrator / worker | `.env` RND_MODEL |
-| generate | `.env` RND_MODEL_GENERATE 또는 QueryRequest.config.generate_model |
+역할별 모델은 기동 시 `rnd_model` 값으로 `system_config`에 `INSERT IGNORE` 시드되며, 이후 `/settings` 페이지 (`PATCH /api/v1/admin/config`)에서 재기동 없이 독립 변경 가능.
 
-> 운영 권장: `RND_MODEL=qwen2.5:32b` 이상, 고성능 환경에서는 120b급 사용
+| 노드 | system_config 키 | 최소 | 권장 |
+|------|-----------------|------|------|
+| orchestrator | `orchestrator_model` | 14b | 32b |
+| worker | `worker_model` | 14b | 32b |
+| generate | `generate_model` | 7b | 32b+ |
+| compaction | `compact_model` | 3b | 7b |
 
 ---
 
@@ -478,8 +480,7 @@ asyncio.run(show())
 ```bash
 # AI Server
 OLLAMA_BASE_URL=http://localhost:11430  # Docker 내부: http://ollama:11434
-RND_MODEL=qwen2.5:7b
-RND_MODEL_GENERATE=qwen2.5:7b
+RND_MODEL=qwen2.5:7b   # 최초 기동 시 시드값 — 이후엔 /settings 에서 역할별 관리
 RND_MAX_ITERATIONS=3
 RND_LOG_LEVEL=INFO
 REDIS_URL=redis://localhost:6379

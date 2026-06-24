@@ -2,7 +2,7 @@
 Config Service (R&D Nexus)
 - QueryConfig:   요청별 설정값 (API 파라미터 또는 DB 기본값)
 - RequestConfig: 현재 요청 설정 접근자 (ContextVar 기반)
-                 우선순위: API 파라미터 > ConfigRepository(DB) > 내장 기본값
+                 우선순위: API 파라미터 > ConfigRepository(DB) > config.py(env) > 내장 기본값
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, ClassVar, Optional, Protocol, runtime_checkable
 
-# 순수 알고리즘 기본값만 보관 — 모델명/replan은 config.py(env)가 단일 출처
 CONFIG_DEFAULTS: dict[str, Any] = {
     "temperature":     0.0,
     "semantic_top_k":  20,
@@ -22,12 +21,15 @@ CONFIG_DEFAULTS: dict[str, Any] = {
 @dataclass
 class QueryConfig:
     """요청별 설정값. None 필드는 _resolve()가 채운다."""
-    generate_model:  Optional[str]   = None  # generate 노드 모델명
-    max_iterations:  Optional[int]   = None  # 오케스트레이터 최대 라운드 수
-    temperature:     Optional[float] = None  # LLM temperature
-    semantic_top_k:  Optional[int]   = None  # Milvus 시맨틱 검색 top-k
-    dense_weight:    Optional[float] = None  # hybrid search dense 가중치
-    sparse_weight:   Optional[float] = None  # hybrid search sparse 가중치
+    orchestrator_model: Optional[str]   = None  # orchestrator 노드 모델명
+    worker_model:       Optional[str]   = None  # worker(parallel_executor) 모델명
+    generate_model:     Optional[str]   = None  # generate 노드 모델명
+    compact_model:      Optional[str]   = None  # context compaction 모델명
+    max_iterations:     Optional[int]   = None  # 오케스트레이터 최대 라운드 수
+    temperature:        Optional[float] = None  # LLM temperature
+    semantic_top_k:     Optional[int]   = None  # Milvus 시맨틱 검색 top-k
+    dense_weight:       Optional[float] = None  # hybrid search dense 가중치
+    sparse_weight:      Optional[float] = None  # hybrid search sparse 가중치
 
 
 @runtime_checkable
@@ -81,20 +83,22 @@ class RequestConfig:
                 val = repo.get(key)
                 if val is not None:
                     return val
-            # config.py(env) 기반 fallback — 모델명/max_iterations는 여기서 처리
-            if key == "generate_model":
-                return s.rnd_model_generate
-            if key == "max_iterations":
-                return s.rnd_max_iterations
+            # config.py(env) 기반 fallback — 정상 기동 시 repo에 항상 시드되므로 safety net
+            if key in ("orchestrator_model", "worker_model", "generate_model", "compact_model"):
+                return s.rnd_model
+            if key == "max_iterations":     return s.rnd_max_iterations
             return RequestConfig._DEFAULTS.get(key)
 
         return QueryConfig(
-            generate_model = _pick("generate_model", o.generate_model),
-            max_iterations = _pick("max_iterations", o.max_iterations),
-            temperature    = _pick("temperature",    o.temperature),
-            semantic_top_k = _pick("semantic_top_k", o.semantic_top_k),
-            dense_weight   = _pick("dense_weight",   o.dense_weight),
-            sparse_weight  = _pick("sparse_weight",  o.sparse_weight),
+            orchestrator_model = _pick("orchestrator_model", o.orchestrator_model),
+            worker_model       = _pick("worker_model",       o.worker_model),
+            generate_model     = _pick("generate_model",     o.generate_model),
+            compact_model      = _pick("compact_model",      o.compact_model),
+            max_iterations     = _pick("max_iterations",     o.max_iterations),
+            temperature        = _pick("temperature",        o.temperature),
+            semantic_top_k     = _pick("semantic_top_k",     o.semantic_top_k),
+            dense_weight       = _pick("dense_weight",       o.dense_weight),
+            sparse_weight      = _pick("sparse_weight",      o.sparse_weight),
         )
 
     @classmethod
@@ -119,8 +123,20 @@ class RequestConfig:
         return default if default is not None else fallback
 
     @property
+    def orchestrator_model(self) -> str:
+        return self.get("orchestrator_model")
+
+    @property
+    def worker_model(self) -> str:
+        return self.get("worker_model")
+
+    @property
     def generate_model(self) -> str:
         return self.get("generate_model")
+
+    @property
+    def compact_model(self) -> str:
+        return self.get("compact_model")
 
     @property
     def max_iterations(self) -> int:
