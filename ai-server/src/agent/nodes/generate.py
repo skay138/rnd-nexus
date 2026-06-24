@@ -1,6 +1,6 @@
 import logging
 import time
-from langchain_core.messages import SystemMessage, AIMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_ollama import ChatOllama
 from agent.state import RDAgentState
@@ -31,12 +31,11 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     tool_result_msgs = [m for m in raw_relevant if getattr(m, "name", None) == "tool_results"]
     other_msgs       = [m for m in raw_relevant if getattr(m, "name", None) != "tool_results"]
 
-    if len(tool_result_msgs) > 1:
-        from langchain_core.messages import AIMessage as _AI
+    if tool_result_msgs:
         merged = "\n\n---\n\n".join(str(m.content) for m in tool_result_msgs)
-        relevant = other_msgs + [_AI(content=merged, name="tool_results")]
+        relevant = other_msgs + [HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")]
     else:
-        relevant = raw_relevant
+        relevant = other_msgs
 
     system_prompt = """<language>Korean</language>
 

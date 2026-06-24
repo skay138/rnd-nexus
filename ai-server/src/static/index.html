@@ -419,7 +419,7 @@
           </select>
         </div>
         <div class="setting-group">
-          <label>Max Replan</label>
+          <label>Max Iterations</label>
           <input type="number" id="conf-replan" value="3" min="1" max="5" step="1">
         </div>
         <div class="setting-group">
@@ -671,8 +671,10 @@
                 scrollChat();
               } else if (payload.type === "task_result") {
                 handleTaskResult(payload.round, payload.task, payload.tools || []);
+                var tLabel = payload.task.substring(0, 70) + (payload.task.length > 70 ? "…" : "");
+                processLines.push("  ▷ " + tLabel);
                 (payload.tools || []).forEach(function(tool) {
-                  processLines.push("  └→ [" + tool.name + "] " + tool.summary);
+                  processLines.push("    └→ [" + tool.name + "] " + tool.summary);
                 });
                 processContent.textContent = processLines.join("\n");
                 scrollChat();
