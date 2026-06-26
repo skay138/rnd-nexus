@@ -57,14 +57,28 @@ def summarize_tool_result(result_str: str) -> str:
     if str(result_str).startswith("[ERROR]"):
         return "오류"
     entities = list(iter_entities(result_str))
-    if not entities:
+    if entities:
+        previews = []
+        for d in entities[:3]:
+            label = str(d.get("name") or d.get("title") or d.get("id") or "")[:25]
+            score = d.get("score")
+            if score is not None:
+                label += f"({score:.2f})"
+            if label:
+                previews.append(label)
+        return f"{len(entities)}건" + (f": {', '.join(previews)}" if previews else "")
+
+    # entity 포맷이 아닌 경우 (그래프 네트워크, Cypher 결과 등) — 비어있는지 확인
+    parsed = try_parse(str(result_str))
+    if parsed is None:
         return "결과 있음"
-    previews = []
-    for d in entities[:3]:
-        label = str(d.get("name") or d.get("title") or d.get("id") or "")[:25]
-        score = d.get("score")
-        if score is not None:
-            label += f"({score:.2f})"
-        if label:
-            previews.append(label)
-    return f"{len(entities)}건" + (f": {', '.join(previews)}" if previews else "")
+    if isinstance(parsed, list):
+        return f"{len(parsed)}건" if parsed else "빈 결과"
+    if isinstance(parsed, dict):
+        nodes = parsed.get("nodes", [])
+        rels = parsed.get("relationships", [])
+        if nodes or rels:
+            return f"nodes {len(nodes)}개, rels {len(rels)}개"
+        # 다른 dict 구조
+        return "결과 있음" if parsed else "빈 결과"
+    return "빈 결과"

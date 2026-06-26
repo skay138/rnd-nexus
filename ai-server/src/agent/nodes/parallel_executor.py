@@ -8,7 +8,8 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, Tool
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
 from common.config.query_config import RequestConfig
-from common.parsers import summarize_tool_result
+from common.parsers import summarize_tool_result, iter_entities, item_to_ref
+from collections import defaultdict
 
 from agent.state import RDAgentState
 from config import get_settings
@@ -54,7 +55,32 @@ def _clean_result(result_str: str) -> str:
     return json.dumps(entities, ensure_ascii=False, indent=2) if entities else result_str
 
 
-
+def _build_history_summary(state_tool_results: dict[str, list[str]]) -> str:
+    """이전 라운드들의 도구 실행 결과에서 엔티티 요약(ID 및 이름) 추출"""
+    entities_by_type = defaultdict(list)
+    seen_ids = set()
+    
+    for tool_name, results in state_tool_results.items():
+        for res in results:
+            for d in iter_entities(res):
+                ref = item_to_ref(d)
+                if not ref:
+                    continue
+                eid = ref["id"]
+                if not eid or eid in seen_ids:
+                    continue
+                seen_ids.add(eid)
+                entities_by_type[ref["type"]].append(f"{ref['title']} ({eid})")
+    
+    if not entities_by_type:
+        return ""
+        
+    lines = ["[이전 라운드 수집 데이터 요약]"]
+    for ntype, items in entities_by_type.items():
+        display_items = items[:15]
+        suffix = f" 외 {len(items)-15}건" if len(items) > 15 else ""
+        lines.append(f"- {ntype}: {', '.join(display_items)}{suffix}")
+    return "\n".join(lines)
 
 
 async def _run_worker(
@@ -62,6 +88,7 @@ async def _run_worker(
     tools_by_name: dict[str, Any],
     settings,
     original_query: str = "",
+    history_summary: str = "",
 ) -> list[tuple[str, str]]:
     """
     Mini ReAct agent — 태스크 설명을 받아 필요한 도구를 스스로 선택·실행하고
@@ -77,6 +104,10 @@ async def _run_worker(
         task_content = f"[원본 질문]\n{original_query}\n\n[태스크]\n{task}"
     else:
         task_content = task
+        
+    if history_summary:
+        task_content += f"\n\n{history_summary}"
+        
     messages: list = [system, HumanMessage(content=task_content)]
     collected: list[tuple[str, str]] = []
     seen_calls: set[str] = set()
@@ -150,8 +181,10 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
 
     t0_all = time.perf_counter()
     original_query = RequestConfig.current().original_query
+    history_summary = _build_history_summary(state.get("tool_results", {}))
+    
     worker_results = await asyncio.gather(*[
-        _run_worker(t, tools_by_name, settings, original_query)
+        _run_worker(t, tools_by_name, settings, original_query, history_summary)
         for t in fresh_tasks
     ])
     total_elapsed = time.perf_counter() - t0_all
