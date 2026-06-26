@@ -1,9 +1,10 @@
 import logging
+import re
 import time
 from pydantic import BaseModel, Field
-from typing import Any, cast
+from typing import Any
 from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from common.llm import get_llm
 from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
@@ -107,13 +108,22 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     relevant_messages = prev_context + formatted_current
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
-    structured = llm.with_structured_output(OrchestratorPlan, method="json_mode")
+
+    def _strip_thinking(msg: AIMessage) -> str:
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+
+    structured = (
+        llm.bind(response_format={"type": "json_object"})
+        | RunnableLambda(_strip_thinking)
+        | RunnableLambda(OrchestratorPlan.model_validate_json)
+    )
 
     t0 = time.perf_counter()
     try:
-        plan = cast(OrchestratorPlan, await structured.ainvoke(
+        plan = await structured.ainvoke(
             [SystemMessage(content=system_prompt)] + relevant_messages
-        ))
+        )
         tasks = plan.tasks
         reasoning = plan.reasoning
     except Exception as e:
