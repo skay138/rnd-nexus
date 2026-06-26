@@ -53,7 +53,7 @@ services:
 
   triton:
     profiles: ["triton"]
-    image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3
+    image: nvcr.io/nvidia/tritonserver:25.12-vllm-python-py3
     container_name: rnd_triton
     ports:
       - "8010:8000"   # Triton HTTP (V2 protocol)
@@ -70,7 +70,6 @@ services:
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
     command: >
       bash -c "
-      pip install --upgrade transformers -q &&
       cd /opt/tritonserver/python/openai &&
       python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B
       "
