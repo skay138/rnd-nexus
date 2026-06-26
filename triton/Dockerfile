@@ -6,12 +6,11 @@ RUN sed -i \
     /opt/tritonserver/python/openai/openai_frontend/engine/utils/tokenizer.py
 
 # Add Qwen3 tool call parser (Hermes <tool_call> format)
-COPY triton/qwen_tool_call_parser.py \
-    /opt/tritonserver/python/openai/openai_frontend/engine/utils/tool_call_parsers/qwen_tool_call_parser.py
+COPY qwen3_tool_call_parser.py /opt/tritonserver/python/openai/openai_frontend/engine/utils/tool_call_parsers/qwen3_tool_call_parser.py
 
-# Register qwen parser in __init__.py
+# Register qwen3 parser in __init__.py
 RUN sed -i \
-    '/^from .tool_call_parser import/a from .qwen_tool_call_parser import QwenToolCallParser' \
+    '/^from .tool_call_parser import/a from .qwen3_tool_call_parser import QwenToolCallParser' \
     /opt/tritonserver/python/openai/openai_frontend/engine/utils/tool_call_parsers/__init__.py && \
     sed -i \
     's/"MistralToolParser",/"MistralToolParser",\n    "QwenToolCallParser",/' \

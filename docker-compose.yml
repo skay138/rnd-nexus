@@ -54,8 +54,8 @@ services:
   triton:
     profiles: ["triton"]
     build:
-      context: .
-      dockerfile: triton/Dockerfile
+      context: triton
+      dockerfile: Dockerfile
     container_name: rnd_triton
     ports:
       - "8010:8000"   # Triton HTTP (V2 protocol)
