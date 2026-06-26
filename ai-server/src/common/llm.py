@@ -57,11 +57,11 @@ def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, *
 async def llm_ainvoke(llm: BaseChatModel, messages: list, config: Any = None) -> str:
     """astream으로 청크를 직접 누적하고 <think> 블록을 제거하여 반환.
 
-    LangGraph astream + Qwen3 thinking 조합에서 ainvoke 응답이 잘리는 문제를 우회.
-    config를 전달하면 LangGraph messages 스트림(SSE 토큰)도 정상 동작.
+    config는 LangGraph 상태 전달용으로만 시그니처에 유지하며, astream에는 넘기지 않는다.
+    넘기면 LangGraph가 스트림을 인터셉트해 Qwen3 thinking 응답이 중간에 잘린다.
     """
     chunks: list[str] = []
-    async for chunk in llm.astream(messages, config):
+    async for chunk in llm.astream(messages):
         chunks.append(chunk.content if isinstance(chunk.content, str) else "")
     full = "".join(chunks)
     return re.sub(r"<think>.*?</think>", "", full, flags=re.DOTALL).strip()

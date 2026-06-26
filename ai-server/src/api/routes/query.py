@@ -81,8 +81,6 @@ async def _stream_events(
     last_iteration_count: int  = 0
     tokens_sent: bool          = False
     last_final_answer: str     = ""
-    _think_buf: str            = ""   # 청크 경계 걸친 <think> 감지용 버퍼
-    _in_think: bool            = False
 
     try:
         async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
@@ -94,34 +92,9 @@ async def _stream_events(
                 if (metadata.get("langgraph_node") == "generate"
                         and isinstance(msg_chunk, AIMessageChunk)):
                     content = getattr(msg_chunk, "content", "")
-                    if not content:
-                        continue
-
-                    # 버퍼에 누적 후 <think>...</think> 구간 필터링
-                    _think_buf += content
-                    output = ""
-                    while _think_buf:
-                        if _in_think:
-                            end = _think_buf.find("</think>")
-                            if end == -1:
-                                _think_buf = ""
-                                break
-                            _in_think = False
-                            _think_buf = _think_buf[end + len("</think>"):]
-                        else:
-                            start = _think_buf.find("<think>")
-                            if start == -1:
-                                # 버퍼 끝이 <think> 앞부분일 수 있으니 7자 미만은 보류
-                                safe = max(0, len(_think_buf) - 6)
-                                output += _think_buf[:safe]
-                                _think_buf = _think_buf[safe:]
-                                break
-                            output += _think_buf[:start]
-                            _in_think = True
-                            _think_buf = _think_buf[start + len("<think>"):]
-                    if output:
+                    if content:
                         tokens_sent = True
-                        yield json.dumps({"type": "token", "content": output})
+                        yield json.dumps({"type": "token", "content": content})
                 continue
 
             # ── 노드 완료 후 상태 스냅샷 (values) ─────────────────────────────

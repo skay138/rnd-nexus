@@ -108,7 +108,7 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
     )
 
     t0 = time.perf_counter()
-    full_content = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant, config)
+    full_content = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant)
     elapsed = time.perf_counter() - t0
 
     logger.debug("[generate] elapsed=%.2fs content_len=%d\n%s", elapsed, len(full_content), full_content[:500])
