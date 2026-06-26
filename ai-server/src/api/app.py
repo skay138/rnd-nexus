@@ -86,8 +86,11 @@ def _configure_logging(log_level: int) -> None:
         _h.setFormatter(_ColorFmt())
         root.addHandler(_h)
 
-    # 저수준 transport 노이즈 억제 (앱 로그레벨과 무관하게 WARNING 고정)
-    _suppress = (
+    # 노이즈 라이브러리 로거 억제 (앱 로그레벨과 무관하게 WARNING 고정)
+    for pkg in (
+        "openai._base_client",
+        "openai.http_client",
+        "httpx",
         "httpcore",
         "mcp.client.sse",
         "sse_starlette",
@@ -95,8 +98,7 @@ def _configure_logging(log_level: int) -> None:
         "langchain_core",
         "langchain_ollama",
         "uvicorn.access",
-    )
-    for pkg in _suppress:
+    ):
         logging.getLogger(pkg).setLevel(logging.WARNING)
 
 

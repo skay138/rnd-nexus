@@ -65,8 +65,6 @@ services:
     shm_size: '4gb'
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-      VLLM_LOGGING_LEVEL: "DEBUG"
-      NCCL_DEBUG: "INFO"
     volumes:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
