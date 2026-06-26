@@ -53,24 +53,15 @@ services:
 
   triton:
     profiles: ["triton"]
-    image: nvcr.io/nvidia/tritonserver:25.12-vllm-python-py3
+    image: nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3
     container_name: rnd_triton
     ports:
       - "8010:8000"   # HTTP — OpenAI-compat /v1/chat/completions
       - "8011:8001"   # gRPC
       - "8012:8002"   # Metrics
     shm_size: '4gb'
-    ipc: "host"
-    ulimits:
-      memlock: -1
-      stack: 67108864
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
-      NCCL_NET_PLUGIN: "none"
-      NCCL_TUNER_PLUGIN: "none"
-      NCCL_ENV_PLUGIN: "none"
-      NCCL_PROFILER_PLUGIN: "none"
-      NCCL_NET: "Socket"
       VLLM_LOGGING_LEVEL: "DEBUG"
       NCCL_DEBUG: "INFO"
     volumes:
