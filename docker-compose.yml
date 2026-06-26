@@ -56,9 +56,10 @@ services:
     image: nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3
     container_name: rnd_triton
     ports:
-      - "8010:8000"   # HTTP — OpenAI-compat /v1/chat/completions
+      - "8010:8000"   # Triton HTTP (V2 protocol)
       - "8011:8001"   # gRPC
       - "8012:8002"   # Metrics
+      - "8013:9000"   # OpenAI-compat /v1/chat/completions
     shm_size: '4gb'
     environment:
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
@@ -68,10 +69,12 @@ services:
       - ./model_repository:/models
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
     command: >
-      tritonserver
-      --model-repository=/models
-      --model-control-mode=explicit
-      --load-model=qwen3-32b
+      bash -c "
+      tritonserver --model-repository=/models --model-control-mode=explicit --load-model=qwen3-32b &
+      until curl -sf http://localhost:8000/v2/health/ready; do sleep 5; done &&
+      cd /opt/tritonserver/python/openai &&
+      python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B
+      "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
       interval: 30s
@@ -212,7 +215,7 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379
-      LLM_BASE_URL: http://triton:8000/v1
+      LLM_BASE_URL: http://triton:9000/v1
       LLM_PROVIDER: openai
       LLM_API_KEY: EMPTY
       MCP_SERVER_URL: http://mcp-server:8000/sse
