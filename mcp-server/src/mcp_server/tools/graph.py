@@ -46,15 +46,28 @@ def register_graph_tools(mcp: FastMCP) -> None:
         """
         Cypher 쿼리 직접 실행 (Neo4j). MATCH/RETURN 기반 READ 전용.
         이미 확보한 엔티티 ID로 그래프를 탐색하거나 집계(COUNT/DISTINCT)가 필요할 때 사용합니다.
-        semantic_graph_search로 표현하기 어려운 복잡한 패턴에 활용하세요.
+        관계 방향이 헷갈리면 semantic_graph_search를 사용하세요.
 
-        [관계 타입] AUTHORED · INVENTED · RESEARCHES · WORKS_AT · CITES · EMPLOYS · USES
-        [노드 레이블] Researcher · Paper · Patent · Technology · Project · Organization
-        [방향 예시]
+        [전체 관계 타입 — 방향 정확히 준수]
           (Researcher)-[:AUTHORED]->(Paper)
+          (Researcher)-[:INVENTED]->(Patent)
           (Researcher)-[:RESEARCHES]->(Technology)
-          (Project)-[:EMPLOYS]->(Researcher)
+          (Researcher)-[:WORKS_AT]->(Organization)
+          (Paper)-[:CITES]->(Paper)
+          (Project)-[:EMPLOYS]->(Researcher)   ← EMPLOYED_BY 없음. 연구자→과제는 역방향으로
           (Project)-[:USES]->(Technology)
+
+        [노드 ID 속성] 모든 노드에 .id 속성 사용
+          Researcher.id='R001'  Paper.id='P001'  Patent.id='KR10-...'
+          Technology.id='T001'  Project.id='RS-2024-...'  Organization.id='ORG001'
+
+        [올바른 역방향 패턴 예시]
+          # 연구자가 참여하는 과제: Project가 주어
+          MATCH (p:Project)-[:EMPLOYS]->(r:Researcher {id: 'R007'}) RETURN p.id, p.title LIMIT 10
+          # 기술을 활용하는 과제:
+          MATCH (p:Project)-[:USES]->(t:Technology {id: 'T001'}) RETURN p.id, p.title LIMIT 10
+          # 논문 저자 연구자:
+          MATCH (r:Researcher)-[:AUTHORED]->(p:Paper {id: 'P001'}) RETURN r.id, r.name
 
         Args:
             cypher: READ 전용 Cypher 쿼리 (MATCH/RETURN만 허용)

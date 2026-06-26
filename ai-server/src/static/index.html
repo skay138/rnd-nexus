@@ -784,11 +784,14 @@
         var reader  = res.body.getReader();
         var decoder = new TextDecoder();
         var text    = "";
+        var buf     = "";
 
         while (true) {
           var chunk = await reader.read();
           if (chunk.done) break;
-          var lines = decoder.decode(chunk.value).split("\n");
+          buf += decoder.decode(chunk.value, { stream: true });
+          var lines = buf.split("\n");
+          buf = lines.pop(); // 마지막 불완전한 줄은 다음 청크로 이월
           for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             if (!line.startsWith("data: ")) continue;
