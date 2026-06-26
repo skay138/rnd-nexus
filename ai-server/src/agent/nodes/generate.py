@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     model = RequestConfig.current().generate_model or settings.rnd_model
-    llm = get_llm(model=model, streaming=True)
+    llm = get_llm(model=model, streaming=True, enable_thinking=False)
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)

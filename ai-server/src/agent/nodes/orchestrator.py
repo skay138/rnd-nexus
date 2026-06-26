@@ -112,7 +112,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
     relevant_messages = prev_context + formatted_current
 
-    llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
+    llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model, enable_thinking=False)
 
     t0 = time.perf_counter()
     try:
