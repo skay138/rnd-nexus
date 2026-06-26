@@ -21,14 +21,17 @@ def iter_entities(result_str: str):
     if not isinstance(items, list):
         return
     for item in items:
-        if not isinstance(item, dict) or item.get("type") != "text":
+        if not isinstance(item, dict):
             continue
-        data = try_parse(item.get("text", ""))
-        if data is None:
-            continue
-        for d in (data if isinstance(data, list) else [data])[:5]:
-            if isinstance(d, dict):
-                yield d
+        if item.get("type") == "text":
+            data = try_parse(item.get("text", ""))
+            if data is None:
+                continue
+            for d in (data if isinstance(data, list) else [data])[:5]:
+                if isinstance(d, dict):
+                    yield d
+        else:
+            yield item
 
 def item_to_ref(d: dict) -> dict | None:
     """엔티티 딕셔너리를 프론트엔드 레퍼런스 포맷으로 변환."""

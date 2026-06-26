@@ -38,16 +38,19 @@ def _clean_result(result_str: str) -> str:
         return result_str
     entities = []
     for item in items:
-        if not (isinstance(item, dict) and item.get("type") == "text"):
+        if not isinstance(item, dict):
             continue
-        try:
-            d = json.loads(item["text"])
-            if isinstance(d, list):
-                entities.extend(d)
-            else:
-                entities.append(d)
-        except Exception:
-            pass
+        if item.get("type") == "text":
+            try:
+                d = json.loads(item["text"])
+                if isinstance(d, list):
+                    entities.extend(d)
+                else:
+                    entities.append(d)
+            except Exception:
+                pass
+        else:
+            entities.append(item)
     return json.dumps(entities, ensure_ascii=False, indent=2) if entities else result_str
 
 
