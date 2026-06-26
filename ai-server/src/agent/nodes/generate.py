@@ -1,8 +1,9 @@
 import logging
+import re
 import time
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
-from common.llm import get_llm, llm_ainvoke
+from common.llm import get_llm
 from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
@@ -108,7 +109,10 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
     )
 
     t0 = time.perf_counter()
-    full_content = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant)
+    chunks: list[str] = []
+    async for chunk in llm.astream([SystemMessage(content=system_prompt)] + relevant, config):
+        chunks.append(chunk.content if isinstance(chunk.content, str) else "")
+    full_content = re.sub(r"<think>.*?</think>", "", "".join(chunks), flags=re.DOTALL).strip()
     elapsed = time.perf_counter() - t0
 
     logger.debug("[generate] elapsed=%.2fs content_len=%d\n%s", elapsed, len(full_content), full_content[:500])

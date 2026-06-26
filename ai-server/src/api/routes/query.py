@@ -81,6 +81,7 @@ async def _stream_events(
     last_iteration_count: int  = 0
     tokens_sent: bool          = False
     last_final_answer: str     = ""
+    think_active: bool         = False
 
     try:
         async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
@@ -91,10 +92,19 @@ async def _stream_events(
                 msg_chunk, metadata = data
                 if (metadata.get("langgraph_node") == "generate"
                         and isinstance(msg_chunk, AIMessageChunk)):
-                    content = getattr(msg_chunk, "content", "")
-                    if content:
-                        tokens_sent = True
-                        yield json.dumps({"type": "token", "content": content})
+                    raw = getattr(msg_chunk, "content", "")
+                    if raw:
+                        if "<think>" in raw:
+                            think_active = True
+                        elif "</think>" in raw:
+                            think_active = False
+                            after = raw.split("</think>", 1)[1]
+                            if after:
+                                tokens_sent = True
+                                yield json.dumps({"type": "token", "content": after})
+                        elif not think_active:
+                            tokens_sent = True
+                            yield json.dumps({"type": "token", "content": raw})
                 continue
 
             # ── 노드 완료 후 상태 스냅샷 (values) ─────────────────────────────
