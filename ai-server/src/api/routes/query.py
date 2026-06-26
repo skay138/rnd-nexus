@@ -81,6 +81,7 @@ async def _stream_events(
     last_iteration_count: int  = 0
     tokens_sent: bool          = False
     last_final_answer: str     = ""
+    _in_think: bool            = False  # Qwen3 <think> 블록 내부 여부
 
     try:
         async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
@@ -92,9 +93,22 @@ async def _stream_events(
                 if (metadata.get("langgraph_node") == "generate"
                         and isinstance(msg_chunk, AIMessageChunk)):
                     content = getattr(msg_chunk, "content", "")
-                    if content:
-                        tokens_sent = True
-                        yield json.dumps({"type": "token", "content": content})
+                    if not content:
+                        continue
+                    # Qwen3 thinking 토큰 필터: <think>...</think> 구간은 SSE로 내보내지 않음
+                    if "<think>" in content:
+                        _in_think = True
+                    if "</think>" in content:
+                        _in_think = False
+                        after = content.split("</think>", 1)[1]
+                        if after:
+                            tokens_sent = True
+                            yield json.dumps({"type": "token", "content": after})
+                        continue
+                    if _in_think:
+                        continue
+                    tokens_sent = True
+                    yield json.dumps({"type": "token", "content": content})
                 continue
 
             # ── 노드 완료 후 상태 스냅샷 (values) ─────────────────────────────

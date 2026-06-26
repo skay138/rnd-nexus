@@ -2,7 +2,7 @@ import logging
 import time
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, RemoveMessage
 from langchain_core.runnables import RunnableConfig
-from common.llm import get_llm
+from common.llm import get_llm, llm_ainvoke
 from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
@@ -21,7 +21,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
     compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
+        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model, enable_thinking=False)
         compacted = await compact_messages(messages, llm_plain)
         # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
         kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
@@ -108,17 +108,8 @@ AI 반도체 분야 핵심 연구자 추천 결과입니다.
     )
 
     t0 = time.perf_counter()
-    response = await llm.ainvoke([SystemMessage(content=system_prompt)] + relevant, config)
+    full_content = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant, config)
     elapsed = time.perf_counter() - t0
-
-    raw = response.content
-    if isinstance(raw, list):
-        full_content = "".join(
-            item["text"] for item in raw
-            if isinstance(item, dict) and item.get("type") == "text"
-        )
-    else:
-        full_content = raw or ""
 
     logger.debug("[generate] elapsed=%.2fs content_len=%d\n%s", elapsed, len(full_content), full_content[:500])
     return {"messages": compaction_msgs + [AIMessage(content=full_content, name="final_answer")]}

@@ -1,11 +1,10 @@
 import logging
-import re
 import time
 from pydantic import BaseModel, Field
 from typing import Any
 from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig, RunnableLambda
-from common.llm import get_llm
+from langchain_core.runnables import RunnableConfig
+from common.llm import get_llm, llm_ainvoke
 from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
@@ -92,7 +91,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
     compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
+        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model, enable_thinking=False)
         compacted = await compact_messages(messages, llm_plain)
         # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
         kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
@@ -115,21 +114,10 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
 
-    def _strip_thinking(msg: AIMessage) -> str:
-        content = msg.content if isinstance(msg.content, str) else str(msg.content)
-        return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-
-    structured = (
-        llm
-        | RunnableLambda(_strip_thinking)
-        | RunnableLambda(OrchestratorPlan.model_validate_json)
-    )
-
     t0 = time.perf_counter()
     try:
-        plan = await structured.ainvoke(
-            [SystemMessage(content=system_prompt)] + relevant_messages
-        )
+        raw = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant_messages)
+        plan = OrchestratorPlan.model_validate_json(raw)
         tasks = plan.tasks
         reasoning = plan.reasoning
     except Exception as e:

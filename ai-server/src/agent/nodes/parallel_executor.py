@@ -64,11 +64,7 @@ async def _run_worker(
     Mini ReAct agent — 태스크 설명을 받아 필요한 도구를 스스로 선택·실행하고
     [(tool_name, result_str), ...] 목록을 반환합니다.
     """
-    # OpenAI-compatible (vLLM/Triton): disable Qwen3 thinking for faster tool-call steps
-    extra_kwargs: dict = {}
-    if settings.llm_provider.lower() == "openai":
-        extra_kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
-    llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model, **extra_kwargs)
+    llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model, enable_thinking=False)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
     system = SystemMessage(content="""당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
