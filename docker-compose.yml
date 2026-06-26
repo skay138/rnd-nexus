@@ -53,7 +53,9 @@ services:
 
   triton:
     profiles: ["triton"]
-    image: nvcr.io/nvidia/tritonserver:25.12-vllm-python-py3
+    build:
+      context: .
+      dockerfile: triton/Dockerfile
     container_name: rnd_triton
     ports:
       - "8010:8000"   # Triton HTTP (V2 protocol)
@@ -71,7 +73,7 @@ services:
     command: >
       bash -c "
       cd /opt/tritonserver/python/openai &&
-      python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B --tool-call-parser llama3
+      python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B --tool-call-parser qwen3
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/v1/models"]
