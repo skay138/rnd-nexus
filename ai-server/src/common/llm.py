@@ -6,7 +6,7 @@ from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, **kwargs) -> BaseChatModel:
+def get_llm(model: str, streaming: bool = False, **kwargs) -> BaseChatModel:
     """
     공통 LLM 팩토리 함수.
     추후 Triton, vLLM, OpenAI 등 다양한 모델 제공자를 지원하기 위해 확장 가능하도록 설계되었습니다.
@@ -37,9 +37,6 @@ def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, *
         # Triton, vLLM 등 OpenAI API 스펙을 호환하는 서버에서 사용
         try:
             from langchain_openai import ChatOpenAI
-            extra_body = kwargs.pop("extra_body", {})
-            if not enable_thinking:
-                extra_body.setdefault("chat_template_kwargs", {})["enable_thinking"] = False
             return ChatOpenAI(
                 model=model,
                 base_url=base_url,
@@ -47,7 +44,6 @@ def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, *
                 api_key=api_key or "EMPTY",
                 timeout=None,
                 max_tokens=kwargs.pop("max_tokens", 8192),
-                extra_body=extra_body or None,
                 **kwargs
             )
         except ImportError:

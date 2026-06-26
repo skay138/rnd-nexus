@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     model = RequestConfig.current().generate_model or settings.rnd_model
-    llm = get_llm(model=model, streaming=True, enable_thinking=False)
+    llm = get_llm(model=model, streaming=True)
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
     compaction_msgs: list = []
     if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model, enable_thinking=False)
+        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
         compacted = await compact_messages(messages, llm_plain)
         # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
         kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
