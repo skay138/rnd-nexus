@@ -70,6 +70,7 @@ services:
       - ${HF_HOME:-$HOME/.cache/huggingface}:/root/.cache/huggingface
     command: >
       bash -c "
+      pip install --upgrade transformers -q &&
       cd /opt/tritonserver/python/openai &&
       python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B
       "
