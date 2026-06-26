@@ -2,6 +2,7 @@ import logging
 from typing import Any, Callable, Optional
 from config import get_settings
 
+from domain.repositories.organization_repository import OrganizationRepository
 from domain.repositories.paper_repository import PaperRepository
 from domain.repositories.patent_repository import PatentRepository
 from domain.repositories.project_repository import ProjectRepository
@@ -23,6 +24,7 @@ class RepositoryFactory:
             from infrastructure.database import PyMySQLPool
             self.db_pool = PyMySQLPool(self.mariadb_url)
 
+        self._organization_repo: Optional[OrganizationRepository] = None
         self._paper_repo: Optional[PaperRepository] = None
         self._patent_repo: Optional[PatentRepository] = None
         self._project_repo: Optional[ProjectRepository] = None
@@ -35,6 +37,12 @@ class RepositoryFactory:
         self._graph_query_fn: Optional[Callable] = None
         self._researcher_network_fn: Optional[Callable] = None
         self._citation_graph_fn: Optional[Callable] = None
+
+    def get_organization_repository(self) -> OrganizationRepository:
+        if self._organization_repo is None:
+            from infrastructure.repositories.organization_repository import InMemoryOrganizationRepository
+            self._organization_repo = InMemoryOrganizationRepository()
+        return self._organization_repo
 
     def get_paper_repository(self) -> PaperRepository:
         if self._paper_repo is None:

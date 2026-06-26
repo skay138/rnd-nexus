@@ -89,6 +89,8 @@ async def _run_worker(
     settings,
     original_query: str = "",
     history_summary: str = "",
+    sse_queue: asyncio.Queue | None = None,
+    current_round: int = 0,
 ) -> list[tuple[str, str]]:
     """
     Mini ReAct agent — 태스크 설명을 받아 필요한 도구를 스스로 선택·실행하고
@@ -147,6 +149,13 @@ async def _run_worker(
                 )
                 collected.append((tool_name, result_str))
                 messages.append(ToolMessage(content=result_str, tool_call_id=tc["id"]))
+                if sse_queue is not None:
+                    await sse_queue.put(("worker_result", {
+                        "type":  "task_result",
+                        "round": current_round,
+                        "task":  task,
+                        "tools": [{"name": tool_name, "summary": summarize_tool_result(result_str)}],
+                    }))
 
         return collected
     except Exception as e:
@@ -191,15 +200,10 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     sse_queue: asyncio.Queue | None = config["configurable"].get("sse_queue")
 
     async def _run_and_emit(task: str) -> list[tuple[str, str]]:
-        pairs = await _run_worker(task, tools_by_name, settings, original_query, history_summary)
-        if sse_queue is not None:
-            await sse_queue.put(("worker_result", {
-                "type":  "task_result",
-                "round": current_round,
-                "task":  task,
-                "tools": [{"name": tn, "summary": summarize_tool_result(rs)} for tn, rs in pairs],
-            }))
-        return pairs
+        return await _run_worker(
+            task, tools_by_name, settings, original_query, history_summary,
+            sse_queue=sse_queue, current_round=current_round,
+        )
 
     t0_all = time.perf_counter()
     worker_results = await asyncio.gather(*[_run_and_emit(t) for t in fresh_tasks])

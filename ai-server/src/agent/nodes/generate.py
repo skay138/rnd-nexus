@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, Remo
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
 from common.config.query_config import RequestConfig
+from common.parsers import build_deduped_context
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
 from config import get_settings
@@ -42,9 +43,9 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         if getattr(m, "name", None) == "tool_results"
     ]
 
-    # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록)
+    # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록, 엔티티 ID 기준 dedup)
     if current_tool_results:
-        merged = "\n\n---\n\n".join(str(m.content) for m in current_tool_results)
+        merged = build_deduped_context(current_tool_results)
         data_msg = HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")
         relevant = prev_context + current_human + [data_msg]
     else:

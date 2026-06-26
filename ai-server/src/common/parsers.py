@@ -45,10 +45,14 @@ def item_to_ref(d: dict) -> dict | None:
         return {"type": "특허", "id": d["patent_id"], "title": d.get("title", "")}
     if "researcher_id" in d:
         return {"type": "연구자", "id": d["researcher_id"], "title": d.get("name", "")}
+    if "tech_id" in d:
+        return {"type": "기술", "id": d["tech_id"], "title": d.get("name", "")}
     if "technology_id" in d:
         return {"type": "기술", "id": d["technology_id"], "title": d.get("name", "")}
     if "project_id" in d:
         return {"type": "과제", "id": d["project_id"], "title": d.get("title", d.get("name", ""))}
+    if "org_id" in d:
+        return {"type": "기관", "id": d["org_id"], "title": d.get("name", "")}
     if "node_type" in d:
         return {
             "type": d["node_type"],

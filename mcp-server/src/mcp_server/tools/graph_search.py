@@ -20,11 +20,9 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
         top_k: int = 10,
     ) -> list[dict[str, Any]]:
         """
-        시맨틱 벡터 진입 + 그래프 다중 홉 탐색 도구.
-
-        Milvus에서 query와 의미적으로 유사한 entry_type 엔티티를 찾고,
-        hops에 정의된 관계를 따라 Neo4j 그래프를 탐색합니다.
-        entry 점수가 홉을 통해 전파되므로 최종 결과는 원본 질문과의 의미 유사도 기준으로 정렬됩니다.
+        관계를 통해 연결된 다른 타입의 엔티티를 찾을 때만 사용하세요 (예: 기술→연구자, 과제→연구자, 논문→저자).
+        entry_type 엔티티를 시맨틱 검색으로 찾은 뒤, hops에 정의된 Neo4j 관계를 따라 target_type 엔티티로 이동합니다.
+        동일 타입 엔티티만 필요하면 semantic_search를 사용하세요.
 
         [사용 가능한 relation 값]
         Researcher→Paper     : "authored"       / Paper→Researcher    : "authored_by"

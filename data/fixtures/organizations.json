@@ -1,0 +1,83 @@
+[
+  {
+    "id": "ORG001",
+    "org_id": "ORG001",
+    "name": "KAIST",
+    "full_name": "한국과학기술원",
+    "type": "대학교",
+    "location": "대전",
+    "text": "KAIST 한국과학기술원 AI 반도체 뉴로모픽 컴퓨팅 인공지능대학원 전기및전자공학부 광자 칩 아날로그"
+  },
+  {
+    "id": "ORG002",
+    "org_id": "ORG002",
+    "name": "서울대학교",
+    "full_name": "서울대학교",
+    "type": "대학교",
+    "location": "서울",
+    "text": "서울대학교 SNU 반도체공학과 NPU 아키텍처 딥러닝 가속기 LLM 추론"
+  },
+  {
+    "id": "ORG003",
+    "org_id": "ORG003",
+    "name": "ETRI",
+    "full_name": "한국전자통신연구원",
+    "type": "연구기관",
+    "location": "대전",
+    "text": "ETRI 한국전자통신연구원 지능형반도체연구본부 PIM Processing-in-Memory HBM 인터페이스 메모리"
+  },
+  {
+    "id": "ORG004",
+    "org_id": "ORG004",
+    "name": "삼성전자",
+    "full_name": "삼성전자 DS부문 Samsung Research",
+    "type": "기업",
+    "location": "수원",
+    "text": "삼성전자 Samsung Research DS부문 3D-IC 적층 패키징 온디바이스 AI NPU 파운드리"
+  },
+  {
+    "id": "ORG005",
+    "org_id": "ORG005",
+    "name": "SK하이닉스",
+    "full_name": "SK하이닉스 미래기술연구원",
+    "type": "기업",
+    "location": "이천",
+    "text": "SK하이닉스 미래기술연구원 CXL 메모리 AI 반도체 메모리 서브시스템 HBM DRAM"
+  },
+  {
+    "id": "ORG006",
+    "org_id": "ORG006",
+    "name": "POSTECH",
+    "full_name": "포항공과대학교",
+    "type": "대학교",
+    "location": "포항",
+    "text": "POSTECH 포항공과대학교 컴퓨터공학과 컴파일러 최적화 엣지 AI 추론 near-sensor"
+  },
+  {
+    "id": "ORG007",
+    "org_id": "ORG007",
+    "name": "UNIST",
+    "full_name": "울산과학기술원",
+    "type": "대학교",
+    "location": "울산",
+    "text": "UNIST 울산과학기술원 전기전자컴퓨터공학부 스파스 연산 가속 트랜스포머 하드웨어 sparse tensor"
+  },
+  {
+    "id": "ORG008",
+    "org_id": "ORG008",
+    "name": "고려대학교",
+    "full_name": "고려대학교",
+    "type": "대학교",
+    "location": "서울",
+    "text": "고려대학교 반도체물리학과 RISC-V 프로세서 오픈소스 하드웨어"
+  },
+  {
+    "id": "ORG009",
+    "org_id": "ORG009",
+    "name": "KIST",
+    "full_name": "한국과학기술연구원",
+    "type": "연구기관",
+    "location": "서울",
+    "text": "KIST 한국과학기술연구원 차세대반도체연구소 AI 반도체 소재 공정 기술 chiplet"
+  }
+]

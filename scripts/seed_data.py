@@ -40,6 +40,7 @@ FIXTURE_FILES = {
     "researchers": FIXTURES_DIR / "researchers.json",
     "technologies": FIXTURES_DIR / "technologies.json",
     "projects": FIXTURES_DIR / "projects.json",
+    "organizations": FIXTURES_DIR / "organizations.json",
 }
 
 NODE_TYPE_MAP = {
@@ -48,6 +49,7 @@ NODE_TYPE_MAP = {
     "researchers": "Researcher",
     "technologies": "Technology",
     "projects": "Project",
+    "organizations": "Organization",
 }
 
 
@@ -117,8 +119,13 @@ def seed_milvus(
     for fixture_key, entities in fixtures.items():
         node_type = NODE_TYPE_MAP[fixture_key]
         texts = [e.get("text", "") for e in entities]
+        _id_keys = {
+            "papers": "paper_id", "patents": "patent_id",
+            "researchers": "researcher_id", "technologies": "tech_id",
+            "projects": "project_id", "organizations": "org_id",
+        }
         entity_ids = [
-            e.get("id", e.get(fixture_key[:-1] + "_id", str(i)))
+            e.get("id", e.get(_id_keys.get(fixture_key, ""), str(i)))
             for i, e in enumerate(entities)
         ]
 
@@ -172,6 +179,7 @@ def seed_neo4j(uri: str, username: str, password: str, clear: bool) -> None:
             ("Researcher", "researcher_id"),
             ("Technology", "tech_id"),
             ("Project", "project_id"),
+            ("Organization", "org_id"),
         ]:
             session.run(
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (n:" + label + ") REQUIRE n." + prop + " IS UNIQUE"
@@ -182,7 +190,7 @@ def seed_neo4j(uri: str, username: str, password: str, clear: bool) -> None:
         for p in fixtures["papers"]:
             session.run(
                 "MERGE (n:Paper {paper_id: $pid}) "
-                "SET n.title = $title, n.year = $year, n.citations = $citations, "
+                "SET n.id = $pid, n.title = $title, n.year = $year, n.citations = $citations, "
                 "n.journal = $journal, n.keywords = $keywords",
                 pid=p["paper_id"],
                 title=p["title"],
@@ -197,7 +205,7 @@ def seed_neo4j(uri: str, username: str, password: str, clear: bool) -> None:
         for p in fixtures["patents"]:
             session.run(
                 "MERGE (n:Patent {patent_id: $pid}) "
-                "SET n.title = $title, n.applicant = $applicant, n.year = $year, n.country = $country",
+                "SET n.id = $pid, n.title = $title, n.applicant = $applicant, n.year = $year, n.country = $country",
                 pid=p["patent_id"],
                 title=p["title"],
                 applicant=p.get("applicant", ""),
@@ -210,43 +218,53 @@ def seed_neo4j(uri: str, username: str, password: str, clear: bool) -> None:
         for t in fixtures["technologies"]:
             session.run(
                 "MERGE (n:Technology {tech_id: $tid}) "
-                "SET n.name = $name, n.trl = $trl, n.investment_priority = $ip",
+                "SET n.id = $tid, n.name = $name, n.trl = $trl, n.investment_priority = $ip",
                 tid=t["tech_id"],
                 name=t["name"],
                 trl=t.get("trl", 0),
                 ip=t.get("investment_priority", ""),
             )
 
-        # Organization nodes (derived from researcher affiliations)
-        orgs: set[str] = {r["affiliation"] for r in fixtures["researchers"]}
-        for org in orgs:
-            session.run("MERGE (o:Organization {name: $name})", name=org)
+        # Organization nodes (from fixture)
+        print("[Neo4j]   Creating Organization nodes...")
+        for o in fixtures["organizations"]:
+            session.run(
+                "MERGE (n:Organization {org_id: $oid}) "
+                "SET n.id = $oid, n.name = $name, n.full_name = $full_name, "
+                "n.type = $type, n.location = $location",
+                oid=o["org_id"],
+                name=o["name"],
+                full_name=o.get("full_name", o["name"]),
+                type=o.get("type", ""),
+                location=o.get("location", ""),
+            )
 
         # Researcher nodes + WORKS_AT
         print("[Neo4j]   Creating Researcher nodes + WORKS_AT...")
         for r in fixtures["researchers"]:
             session.run(
                 "MERGE (n:Researcher {researcher_id: $rid}) "
-                "SET n.name = $name, n.affiliation = $aff, n.h_index = $h, n.specialty = $spec",
+                "SET n.id = $rid, n.name = $name, n.affiliation = $aff, n.h_index = $h, n.specialty = $spec",
                 rid=r["researcher_id"],
                 name=r["name"],
                 aff=r["affiliation"],
                 h=r.get("h_index", 0),
                 spec=r.get("specialty", ""),
             )
-            session.run(
-                "MATCH (r:Researcher {researcher_id: $rid}), (o:Organization {name: $org}) "
-                "MERGE (r)-[:WORKS_AT]->(o)",
-                rid=r["researcher_id"],
-                org=r["affiliation"],
-            )
+            if r.get("organization_id"):
+                session.run(
+                    "MATCH (r:Researcher {researcher_id: $rid}), (o:Organization {org_id: $oid}) "
+                    "MERGE (r)-[:WORKS_AT]->(o)",
+                    rid=r["researcher_id"],
+                    oid=r["organization_id"],
+                )
 
         # Project nodes
         print("[Neo4j]   Creating Project nodes...")
         for p in fixtures["projects"]:
             session.run(
                 "MERGE (n:Project {project_id: $pid}) "
-                "SET n.title = $title, n.organization = $org, n.year = $year, n.status = $status",
+                "SET n.id = $pid, n.title = $title, n.organization = $org, n.year = $year, n.status = $status",
                 pid=p["project_id"],
                 title=p["title"],
                 org=p.get("organization", ""),

@@ -20,9 +20,9 @@ def register_vector_tools(mcp: FastMCP) -> None:
         sparse_weight: float = 0.7,
     ) -> list[dict[str, Any]]:
         """
-        시맨틱 벡터 검색 (Milvus Hybrid: Dense COSINE + BM25 Sparse).
-        자연어 질문의 의미를 이해하여 관련 R&D 엔티티(논문·특허·기술·연구자·과제)를 검색합니다.
-        구체적인 키워드를 모를 때, 또는 복수 도메인에 걸쳐 탐색할 때 가장 먼저 호출하세요.
+        특정 타입의 엔티티 목록을 시맨틱 검색으로 가져올 때 사용합니다.
+        동일 타입 엔티티(예: 논문 목록, 기술 목록)만 필요하거나, 관계 탐색 없이 ID를 수집할 때 호출하세요.
+        다른 타입으로 연결된 엔티티가 필요하면(예: 기술→연구자, 논문→저자) semantic_graph_search를 사용하세요.
 
         Args:
             query:         검색 쿼리 (자연어. 예: 'AI 반도체 저전력 설계 연구')

@@ -5,11 +5,12 @@ from mcp.server.fastmcp import FastMCP
 
 
 _ENTITY_CONFIG: dict[str, dict[str, Any]] = {
-    "Researcher": {"get_repo": "get_researcher_repository"},
-    "Paper":      {"get_repo": "get_paper_repository"},
-    "Patent":     {"get_repo": "get_patent_repository"},
-    "Technology": {"get_repo": "get_technology_repository"},
-    "Project":    {"get_repo": "get_project_repository"},
+    "Researcher":   {"get_repo": "get_researcher_repository"},
+    "Paper":        {"get_repo": "get_paper_repository"},
+    "Patent":       {"get_repo": "get_patent_repository"},
+    "Technology":   {"get_repo": "get_technology_repository"},
+    "Project":      {"get_repo": "get_project_repository"},
+    "Organization": {"get_repo": "get_organization_repository"},
 }
 
 
@@ -23,7 +24,7 @@ def register_entity_tools(mcp: FastMCP) -> None:
         semantic_search 또는 graph 도구로 발견한 ID를 이 도구에 전달하세요.
 
         Args:
-            entity_type: 엔티티 타입 — Researcher | Paper | Patent | Technology | Project
+            entity_type: 엔티티 타입 — Researcher | Paper | Patent | Technology | Project | Organization
             ids:         조회할 ID 목록 (예: ["R001", "R007"])
 
         Returns:
