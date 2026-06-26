@@ -80,7 +80,13 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 - 현재 라운드: {iteration_count + 1} / {max_iterations}
 - 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요
 - 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요.
-</constraints>"""
+</constraints>
+
+<output_format>
+반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트는 절대 포함하지 마세요.
+{{"reasoning": "수집 현황 평가 및 전략 (한국어)", "tasks": ["태스크1", "태스크2"]}}
+수집 완료 시: {{"reasoning": "완료 이유", "tasks": []}}
+</output_format>"""
 
     messages = list(state["messages"])
     approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
@@ -114,7 +120,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
     structured = (
-        llm.bind(response_format={"type": "json_object"})
+        llm
         | RunnableLambda(_strip_thinking)
         | RunnableLambda(OrchestratorPlan.model_validate_json)
     )
