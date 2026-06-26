@@ -44,6 +44,7 @@ def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, *
                 base_url=base_url,
                 streaming=streaming,
                 api_key=api_key or "EMPTY",
+                timeout=60,
                 **kwargs
             )
         except ImportError:
