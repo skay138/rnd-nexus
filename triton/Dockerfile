@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3
+FROM nvcr.io/nvidia/tritonserver:25.12-vllm-python-py3
 
 # Patch Qwen2Tokenizer: all_special_tokens_extended attribute missing in slow tokenizer
 RUN sed -i \
