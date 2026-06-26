@@ -37,14 +37,13 @@ def get_llm(model: str, streaming: bool = False, enable_thinking: bool = True, *
         # Triton, vLLM 등 OpenAI API 스펙을 호환하는 서버에서 사용
         try:
             from langchain_openai import ChatOpenAI
-            if not enable_thinking:
-                kwargs.setdefault("extra_body", {"chat_template_kwargs": {"enable_thinking": False}})
             return ChatOpenAI(
                 model=model,
                 base_url=base_url,
                 streaming=streaming,
                 api_key=api_key or "EMPTY",
-                timeout=60,
+                timeout=None,
+                max_tokens=kwargs.pop("max_tokens", 8192),
                 **kwargs
             )
         except ImportError:
