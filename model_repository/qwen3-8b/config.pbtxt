@@ -1,3 +1,0 @@
-backend: "vllm"
-max_batch_size: 0
-model_transaction_policy { decoupled: true }

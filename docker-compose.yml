@@ -53,7 +53,7 @@ services:
 
   triton:
     profiles: ["triton"]
-    image: nvcr.io/nvidia/tritonserver:26.06-vllm-python-py3
+    image: nvcr.io/nvidia/tritonserver:26.05-vllm-python-py3
     container_name: rnd_triton
     ports:
       - "8010:8000"   # Triton HTTP (V2 protocol)
