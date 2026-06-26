@@ -1,6 +1,10 @@
 import ast
 import json
+import re
 from typing import Any
+
+# tool_results 메시지 내 툴명 줄 패턴: [semantic_search], [get_entities] 등
+_TOOL_LINE_RE = re.compile(r'^\[[a-z_]+\]$')
 
 def try_parse(s: str) -> Any:
     """JSON 우선, 실패 시 ast.literal_eval로 파싱."""
@@ -52,6 +56,50 @@ def item_to_ref(d: dict) -> dict | None:
             "title": d.get("name", d.get("title", "")),
         }
     return None
+
+def build_deduped_context(tool_result_messages: list) -> str:
+    """
+    tool_results AIMessage 목록에서 엔티티를 ID 기준 dedup하여 단일 컨텍스트 반환.
+    엔티티가 없는 결과(그래프 쿼리 등)는 문자열 중복 제거 후 그대로 보존.
+    """
+    seen_ids: set[str] = set()
+    unique_entities: list[dict] = []
+    seen_other: set[str] = set()
+    other_parts: list[str] = []
+
+    for msg in tool_result_messages:
+        content = str(msg.content)
+        for section in content.split("\n\n---\n\n"):
+            for block in section.split("\n\n"):
+                lines = block.strip().splitlines()
+                tool_idx = next(
+                    (i for i, ln in enumerate(lines) if _TOOL_LINE_RE.match(ln.strip())),
+                    None,
+                )
+                if tool_idx is None:
+                    continue
+                result_str = "\n".join(lines[tool_idx + 1:]).strip()
+                if not result_str or result_str.startswith("[ERROR]"):
+                    continue
+                entities = list(iter_entities(result_str))
+                if entities:
+                    for entity in entities:
+                        ref = item_to_ref(entity)
+                        eid = (ref["id"] if ref else "") or str(entity.get("id") or entity.get("entity_id", ""))
+                        if not eid or eid in seen_ids:
+                            continue
+                        seen_ids.add(eid)
+                        unique_entities.append(entity)
+                elif result_str not in seen_other:
+                    seen_other.add(result_str)
+                    other_parts.append(result_str)
+
+    parts: list[str] = []
+    if unique_entities:
+        parts.append(json.dumps(unique_entities, ensure_ascii=False, indent=2))
+    parts.extend(other_parts)
+    return "\n\n---\n\n".join(parts) if parts else "\n\n---\n\n".join(str(m.content) for m in tool_result_messages)
+
 
 def summarize_tool_result(result_str: str) -> str:
     if str(result_str).startswith("[ERROR]"):
