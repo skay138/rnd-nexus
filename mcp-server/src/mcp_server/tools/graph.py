@@ -1,6 +1,7 @@
 """MCP 도구: 그래프 탐색 (Neo4j)"""
 from __future__ import annotations
 import logging
+import re
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -44,8 +45,16 @@ def register_graph_tools(mcp: FastMCP) -> None:
     def run_graph_query(cypher: str) -> list[dict[str, Any]]:
         """
         Cypher 쿼리 직접 실행 (Neo4j). MATCH/RETURN 기반 READ 전용.
-        연구자 협업 네트워크·인용 그래프 등 semantic_graph_search로 표현하기 어려운
-        복잡한 그래프 패턴 탐색에 사용합니다.
+        이미 확보한 엔티티 ID로 그래프를 탐색하거나 집계(COUNT/DISTINCT)가 필요할 때 사용합니다.
+        semantic_graph_search로 표현하기 어려운 복잡한 패턴에 활용하세요.
+
+        [관계 타입] AUTHORED · INVENTED · RESEARCHES · WORKS_AT · CITES · EMPLOYS · USES
+        [노드 레이블] Researcher · Paper · Patent · Technology · Project · Organization
+        [방향 예시]
+          (Researcher)-[:AUTHORED]->(Paper)
+          (Researcher)-[:RESEARCHES]->(Technology)
+          (Project)-[:EMPLOYS]->(Researcher)
+          (Project)-[:USES]->(Technology)
 
         Args:
             cypher: READ 전용 Cypher 쿼리 (MATCH/RETURN만 허용)
@@ -54,11 +63,12 @@ def register_graph_tools(mcp: FastMCP) -> None:
         if fn is None:
             return [{"error": "Neo4j 미설정 — NEO4J_URI 환경변수를 확인하세요."}]
 
+        # 관계 타입 대소문자 자동 정규화: [:employs] → [:EMPLOYS]
+        cypher = re.sub(r'\[:([A-Za-z_]+)\]', lambda m: f'[:{m.group(1).upper()}]', cypher)
+
         _WRITE_KEYWORDS = {"CREATE", "MERGE", "DELETE", "DETACH", "SET", "REMOVE", "DROP", "CALL"}
-        upper = cypher.upper()
-        blocked = [kw for kw in _WRITE_KEYWORDS if kw in upper]
-        if blocked:
-            return [{"error": f"쓰기 작업 차단: {blocked}. MATCH/RETURN 전용 쿼리만 허용됩니다."}]
+        if any(kw in cypher.upper() for kw in _WRITE_KEYWORDS):
+            return [{"error": "쓰기 작업 차단. MATCH/RETURN 전용 쿼리만 허용됩니다."}]
 
         try:
             return fn(cypher)
