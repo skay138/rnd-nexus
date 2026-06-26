@@ -166,7 +166,13 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
         return {"pending_tasks": [], "executed_tasks": executed}
 
     already_run = {_task_key(t) for t in executed}
-    fresh_tasks = [t for t in pending_tasks if _task_key(t) not in already_run]
+    seen_in_batch: set[str] = set()
+    fresh_tasks: list[str] = []
+    for t in pending_tasks:
+        k = _task_key(t)
+        if k not in already_run and k not in seen_in_batch:
+            seen_in_batch.add(k)
+            fresh_tasks.append(t)
 
     skipped = len(pending_tasks) - len(fresh_tasks)
     if skipped:
@@ -179,14 +185,24 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     logger.debug("[parallel_executor] %s\n  워커 %d개 시작: %s",
                  _SEP, len(fresh_tasks), " | ".join(t[:30] for t in fresh_tasks))
 
-    t0_all = time.perf_counter()
-    original_query = RequestConfig.current().original_query
+    current_round   = state.get("iteration_count", 0)
+    original_query  = RequestConfig.current().original_query
     history_summary = _build_history_summary(state.get("tool_results", {}))
-    
-    worker_results = await asyncio.gather(*[
-        _run_worker(t, tools_by_name, settings, original_query, history_summary)
-        for t in fresh_tasks
-    ])
+    sse_queue: asyncio.Queue | None = config["configurable"].get("sse_queue")
+
+    async def _run_and_emit(task: str) -> list[tuple[str, str]]:
+        pairs = await _run_worker(task, tools_by_name, settings, original_query, history_summary)
+        if sse_queue is not None:
+            await sse_queue.put(("worker_result", {
+                "type":  "task_result",
+                "round": current_round,
+                "task":  task,
+                "tools": [{"name": tn, "summary": summarize_tool_result(rs)} for tn, rs in pairs],
+            }))
+        return pairs
+
+    t0_all = time.perf_counter()
+    worker_results = await asyncio.gather(*[_run_and_emit(t) for t in fresh_tasks])
     total_elapsed = time.perf_counter() - t0_all
 
     summary = "  " + "\n  ".join(
@@ -195,7 +211,6 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     )
     logger.debug("[parallel_executor] 완료 %.2fs\n%s\n%s", total_elapsed, summary, _SEP)
 
-    current_round = state.get("iteration_count", 0)
     updated: dict[str, list[str]] = dict(state.get("tool_results", {}))
     new_task_results: list[dict] = []
     msg_lines: list[str] = []

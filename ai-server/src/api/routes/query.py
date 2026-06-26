@@ -1,5 +1,5 @@
 from __future__ import annotations
-import ast
+import asyncio
 import json
 import logging
 import uuid
@@ -76,16 +76,44 @@ async def _stream_events(
     initial_state: dict[str, Any],
     config: dict[str, Any],
 ) -> AsyncGenerator[str, None]:
-    last_tool_results: dict    = {}
-    prev_task_result_count: int = 0
-    last_iteration_count: int  = 0
-    tokens_sent: bool          = False
-    last_final_answer: str     = ""
-    think_active: bool         = False
+    sse_queue: asyncio.Queue = asyncio.Queue()
+    config["configurable"]["sse_queue"] = sse_queue
+
+    last_tool_results: dict   = {}
+    last_iteration_count: int = 0
+    tokens_sent: bool         = False
+    last_final_answer: str    = ""
+    think_active: bool        = False
+
+    async def _run_graph() -> None:
+        try:
+            async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
+                await sse_queue.put(("graph", item))
+        except Exception as e:
+            await sse_queue.put(("error", e))
+        finally:
+            await sse_queue.put(None)
+
+    asyncio.create_task(_run_graph())
 
     try:
-        async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
-            mode, data = item
+        while True:
+            item = await sse_queue.get()
+            if item is None:
+                break
+
+            kind = item[0]
+
+            if kind == "error":
+                yield json.dumps({"type": "error", "message": str(item[1])})
+                break
+
+            if kind == "worker_result":
+                yield json.dumps(item[1])
+                continue
+
+            # kind == "graph"
+            mode, data = item[1]
 
             # ── 실시간 토큰 (generate 노드에서만) ─────────────────────────────
             if mode == "messages":
@@ -113,13 +141,11 @@ async def _stream_events(
             iteration_count = data.get("iteration_count", 0)
             pending_tasks   = data.get("pending_tasks", [])
 
-            # final_answer 추적 (토큰 미수신 시 fallback용)
             for msg in reversed(messages):
                 if getattr(msg, "name", None) == "final_answer":
                     last_final_answer = str(msg.content)
                     break
 
-            # 오케스트레이터 라운드 이벤트
             if iteration_count > last_iteration_count:
                 last_iteration_count = iteration_count
                 orch_msg = next(
@@ -127,9 +153,8 @@ async def _stream_events(
                     None,
                 )
                 if orch_msg:
-                    # msg_content = reasoning + "\n\n[계획한 태스크]..." 형식 — 순수 reasoning만 추출
-                    raw = str(orch_msg.content)
-                    reasoning_only = raw.split("\n\n[계획한 태스크]")[0].split("\n\n[수집 완료")[0]
+                    raw_content = str(orch_msg.content)
+                    reasoning_only = raw_content.split("\n\n[계획한 태스크]")[0].split("\n\n[수집 완료")[0]
                     yield json.dumps({
                         "type":      "orchestrator",
                         "round":     iteration_count,
@@ -137,15 +162,6 @@ async def _stream_events(
                         "tasks":     pending_tasks,
                     })
 
-            # task별 실행 결과 (parallel_executor)
-            task_results_list = data.get("task_results", [])
-            if len(task_results_list) > prev_task_result_count:
-                for tr in task_results_list[prev_task_result_count:]:
-                    yield json.dumps({"type": "task_result", "round": tr["round"],
-                                      "task": tr["task"], "tools": tr["tools"]})
-                prev_task_result_count = len(task_results_list)
-
-            # _build_references용 tool_results 유지
             if tool_results:
                 last_tool_results = tool_results
 
@@ -153,7 +169,6 @@ async def _stream_events(
         logger.exception("agent_query 스트리밍 오류")
         yield json.dumps({"type": "error", "message": str(e)})
 
-    # 토큰이 전혀 스트림되지 않았지만 final_answer가 있으면 한번에 전송
     if not tokens_sent and last_final_answer:
         logger.warning("[query] 토큰 미수신 — final_answer fallback 전송 (len=%d)", len(last_final_answer))
         yield json.dumps({"type": "token", "content": last_final_answer})
