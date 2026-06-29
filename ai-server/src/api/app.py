@@ -15,7 +15,7 @@ from agent.graph import build_graph
 from agent.mcp_client import mcp_server_session, get_llm_and_tools
 from memory.session import create_memory
 from infrastructure.config_repository import make_config_repo
-from api.routes import health, query, admin
+from api.routes import health, query, admin, stats
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(query.router,  prefix="/api/v1")
     app.include_router(admin.router,  prefix="/api/v1")
+    app.include_router(stats.router,  prefix="/api/v1")
 
     if _STATIC.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")

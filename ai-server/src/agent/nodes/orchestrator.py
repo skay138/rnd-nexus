@@ -80,6 +80,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 - 현재 라운드: {iteration_count + 1} / {max_iterations}
 - 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요
 - 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요.
+- reasoning은 [수집된 데이터]에 명시된 사실만 근거로 작성하라. 데이터에 없는 기관·인물·관계·소속을 유추하거나 창작하지 마라.
 </constraints>
 
 <output_format>
@@ -109,6 +110,16 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
             formatted_current.append(
                 HumanMessage(content=f"[수집된 데이터]\n{m.content}", name="tool_results")
             )
+        elif getattr(m, "name", None) == "orchestrator":
+            # reasoning 제거 — 틀린 추론이 다음 라운드로 재투입되어 누적되는 것 방지
+            # 태스크 목록만 유지하여 "무엇을 계획했는가"만 전달
+            content = str(m.content)
+            if "\n\n[계획한 태스크]" in content:
+                tasks_part = content.split("\n\n[계획한 태스크]", 1)[1].strip()
+                formatted_current.append(
+                    AIMessage(content=f"[계획한 태스크]\n{tasks_part}", name="orchestrator")
+                )
+            # 수집 완료/범위 외 메시지는 재투입 불필요 — skip
         else:
             formatted_current.append(m)
 

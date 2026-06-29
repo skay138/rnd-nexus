@@ -13,18 +13,24 @@ def register_graph_tools(mcp: FastMCP) -> None:
     from infrastructure.component_factory import repository_factory
 
     @mcp.tool()
-    def get_researcher_network(researcher_name: str) -> list[dict[str, Any]]:
+    def get_researcher_network(researcher_name: str = "", researcher_id: str = "") -> list[dict[str, Any]]:
         """
         연구자 네트워크 조회 (Neo4j).
         연구자가 발표한 논문, 발명 특허, 소속 기관, 연구 기술 분야를 반환합니다.
 
+        동명이인 방지를 위해 researcher_id(예: 'R006')를 우선 사용하세요.
+        ID를 모를 때만 researcher_name(부분 일치)으로 조회하세요.
+
         Args:
-            researcher_name: 연구자 이름 (부분 일치 검색)
+            researcher_name: 연구자 이름 (부분 일치, ID 미확보 시 사용)
+            researcher_id:   연구자 ID (예: 'R006') — 정확 매칭, 동명이인 방지
         """
         fn = repository_factory.get_researcher_network_fn()
         if fn is None:
             return [{"error": "Neo4j 미설정 — NEO4J_URI 환경변수를 확인하세요."}]
-        return fn(researcher_name)
+        if not researcher_name and not researcher_id:
+            return [{"error": "researcher_name 또는 researcher_id 중 하나는 필수입니다."}]
+        return fn(researcher_name=researcher_name, researcher_id=researcher_id)
 
     @mcp.tool()
     def get_citation_graph(paper_title: str, depth: int = 2) -> list[dict[str, Any]]:
@@ -82,6 +88,19 @@ def register_graph_tools(mcp: FastMCP) -> None:
         _WRITE_KEYWORDS = {"CREATE", "MERGE", "DELETE", "DETACH", "SET", "REMOVE", "DROP", "CALL"}
         if any(kw in cypher.upper() for kw in _WRITE_KEYWORDS):
             return [{"error": "쓰기 작업 차단. MATCH/RETURN 전용 쿼리만 허용됩니다."}]
+
+        _INVERSE_HINTS = {
+            "USED_BY":      "(p:Project)-[:USES]->(t:Technology) — Project가 주어",
+            "EMPLOYED_BY":  "(p:Project)-[:EMPLOYS]->(r:Researcher) — Project가 주어",
+            "AUTHORED_BY":  "(r:Researcher)-[:AUTHORED]->(p:Paper) — Researcher가 주어",
+            "INVENTED_BY":  "(r:Researcher)-[:INVENTED]->(p:Patent) — Researcher가 주어",
+            "CITED_BY":     "(p:Paper)-[:CITES]->(p2:Paper) — 인용하는 Paper가 주어",
+            "WORKS_AT_BY":  "(r:Researcher)-[:WORKS_AT]->(o:Organization)",
+        }
+        cypher_upper = cypher.upper()
+        for inv, hint in _INVERSE_HINTS.items():
+            if inv in cypher_upper:
+                return [{"error": f"존재하지 않는 관계 타입 '{inv}'. 올바른 패턴: {hint}"}]
 
         try:
             return fn(cypher)

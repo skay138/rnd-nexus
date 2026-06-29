@@ -504,78 +504,18 @@
     <details class="data-catalog">
       <summary>
         데이터 현황
-        <span class="catalog-count">논문 12</span>
-        <span class="catalog-count">특허 10</span>
-        <span class="catalog-count">연구자 10</span>
-        <span class="catalog-count">기술 7</span>
-        <span class="catalog-count">과제 10</span>
+        <span class="catalog-count" id="cnt-papers">논문 …</span>
+        <span class="catalog-count" id="cnt-patents">특허 …</span>
+        <span class="catalog-count" id="cnt-researchers">연구자 …</span>
+        <span class="catalog-count" id="cnt-technologies">기술 …</span>
+        <span class="catalog-count" id="cnt-projects">과제 …</span>
+        <span class="catalog-count" id="cnt-organizations">기관 …</span>
       </summary>
-      <div class="catalog-body">
-        <div class="catalog-col">
-          <span class="catalog-heading">논문 (12)</span>
-          <div class="catalog-tags">
-            <span class="ctag">뉴로모픽 컴퓨팅</span>
-            <span class="ctag">PIM / NPU</span>
-            <span class="ctag">온디바이스 LLM</span>
-            <span class="ctag">HBM / CXL 메모리</span>
-            <span class="ctag">3D-IC / 칩릿</span>
-            <span class="ctag">스파스 텐서코어</span>
-            <span class="ctag">아날로그 인메모리</span>
-            <span class="ctag">엣지 AI / RISC-V</span>
-          </div>
+      <div class="catalog-body" id="catalog-body">
+        <div class="catalog-col" style="opacity:0.4;">
+          <span class="catalog-heading">불러오는 중…</span>
         </div>
-        <div class="catalog-col">
-          <span class="catalog-heading">특허 (10)</span>
-          <div class="catalog-tags">
-            <span class="ctag">뉴로모픽 반도체 (삼성)</span>
-            <span class="ctag">PIM DNN 가속 (삼성)</span>
-            <span class="ctag">온디바이스 NPU (LG)</span>
-            <span class="ctag">HBM AI 가속기 (SK)</span>
-            <span class="ctag">CXL 메모리 확장 (SK)</span>
-            <span class="ctag">아날로그 CIM (Intel)</span>
-            <span class="ctag">광자 행렬곱 (Lightmatter)</span>
-            <span class="ctag">칩릿 이종집적 (Huawei)</span>
-          </div>
-        </div>
-        <div class="catalog-col">
-          <span class="catalog-heading">연구자 (10)</span>
-          <div class="catalog-tags">
-            <span class="ctag">김정호 / KAIST (뉴로모픽)</span>
-            <span class="ctag">이수진 / 서울대 (NPU)</span>
-            <span class="ctag">박민준 / ETRI (PIM)</span>
-            <span class="ctag">최유리 / 삼성 (3D-IC)</span>
-            <span class="ctag">정태양 / SK하이닉스 (CXL)</span>
-            <span class="ctag">오하나 / POSTECH (엣지AI)</span>
-            <span class="ctag">한동현 / KAIST (광자AI)</span>
-            <span class="ctag">강지원 / UNIST (스파스)</span>
-          </div>
-        </div>
-        <div class="catalog-col">
-          <span class="catalog-heading">기술 (7)</span>
-          <div class="catalog-tags">
-            <span class="ctag">PIM (TRL 6)</span>
-            <span class="ctag">뉴로모픽 컴퓨팅 (TRL 5)</span>
-            <span class="ctag">광자 AI 칩 (TRL 4)</span>
-            <span class="ctag">3D-IC 이기종 집적 (TRL 7)</span>
-            <span class="ctag">온디바이스 LLM (TRL 7)</span>
-            <span class="ctag">CXL 메모리 (TRL 6)</span>
-            <span class="ctag">아날로그 인메모리 (TRL 4)</span>
-          </div>
-        </div>
-        <div class="catalog-col">
-          <span class="catalog-heading">과제 (10)</span>
-          <div class="catalog-tags">
-            <span class="ctag">뉴로모픽 AI 반도체 (ETRI)</span>
-            <span class="ctag">PIM AI 가속기 (KAIST)</span>
-            <span class="ctag">온디바이스 NPU (삼성·POSTECH)</span>
-            <span class="ctag">3D 이종집적 패키징 (POSTECH)</span>
-            <span class="ctag">AI 반도체 소재·공정 (KIST)</span>
-            <span class="ctag">RISC-V AI 프로세서 (한양대)</span>
-            <span class="ctag">스파스 AI 가속기 (UNIST)</span>
-            <span class="ctag">엣지 AI 표준화 (KETI)</span>
-          </div>
-        </div>
-        <div class="catalog-col">
+        <div class="catalog-col" id="catalog-graph-col">
           <span class="catalog-heading">그래프 관계</span>
           <div class="catalog-tags">
             <span class="ctag">Researcher → [AUTHORED] → Paper</span>
@@ -640,6 +580,56 @@
       })
       .catch(function() {
         document.getElementById("dot").className = "status-dot err";
+      });
+
+    // ── Data catalog (동적 로딩) ──────────────────────────────────────────────
+    var _CATALOG_LABELS = {
+      papers:        "논문",
+      patents:       "특허",
+      researchers:   "연구자",
+      technologies:  "기술",
+      projects:      "과제",
+      organizations: "기관",
+    };
+
+    fetch("/api/v1/stats")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // summary 카운트 업데이트
+        Object.keys(_CATALOG_LABELS).forEach(function(key) {
+          var el = document.getElementById("cnt-" + key);
+          if (el && data[key]) el.textContent = _CATALOG_LABELS[key] + " " + data[key].count;
+        });
+
+        // catalog-body 재구성 (그래프 관계 col 보존)
+        var body = document.getElementById("catalog-body");
+        var graphCol = document.getElementById("catalog-graph-col");
+        body.innerHTML = "";
+
+        Object.keys(_CATALOG_LABELS).forEach(function(key) {
+          var d = data[key];
+          if (!d) return;
+          var col = document.createElement("div");
+          col.className = "catalog-col";
+          var tags = (d.items || []).map(function(item) {
+            var label = item.sub ? item.name + " (" + item.sub + ")" : item.name;
+            return '<span class="ctag">' + escHtml(label) + '</span>';
+          }).join("");
+          col.innerHTML =
+            '<span class="catalog-heading">' + _CATALOG_LABELS[key] + ' (' + d.count + ')</span>' +
+            '<div class="catalog-tags">' + tags + '</div>';
+          body.appendChild(col);
+        });
+
+        if (graphCol) body.appendChild(graphCol);
+      })
+      .catch(function() {
+        // 실패 시 요약 카운트만 정적 표기로 복원
+        var fallback = {papers:12, patents:10, researchers:10, technologies:7, projects:10, organizations:9};
+        Object.keys(fallback).forEach(function(key) {
+          var el = document.getElementById("cnt-" + key);
+          if (el) el.textContent = _CATALOG_LABELS[key] + " " + fallback[key];
+        });
       });
 
     // ── Chat helpers ─────────────────────────────────────────────────────────

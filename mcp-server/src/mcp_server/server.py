@@ -5,6 +5,8 @@ R&D Nexus MCP Server
 
 from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from config import get_settings
 import logging
@@ -24,6 +26,37 @@ register_vector_tools(mcp)        # semantic_search
 register_graph_search_tools(mcp)  # semantic_graph_search
 register_entity_tools(mcp)        # get_entities (ID 기반 상세 조회)
 register_graph_tools(mcp)         # get_researcher_network, get_citation_graph, run_graph_query
+
+
+_FIXTURE_META = [
+    ("papers",        "papers.json",        "paper_id",      "title",  "authors"),
+    ("patents",       "patents.json",        "patent_id",     "title",  "assignee"),
+    ("researchers",   "researchers.json",    "researcher_id", "name",   "affiliation"),
+    ("technologies",  "technologies.json",   "tech_id",       "name",   "trl"),
+    ("projects",      "projects.json",       "project_id",    "title",  "lead_organization"),
+    ("organizations", "organizations.json",  "org_id",        "name",   "type"),
+]
+
+
+@mcp.custom_route("/stats", methods=["GET"])
+async def stats_handler(request: Request) -> JSONResponse:
+    from infrastructure.repositories.in_memory_utils import load_fixture
+    result: dict = {}
+    for key, filename, id_field, name_field, sub_field in _FIXTURE_META:
+        try:
+            data = load_fixture(filename)
+            items = []
+            for d in data:
+                name = d.get(name_field) or d.get("title") or d.get("name") or ""
+                sub  = d.get(sub_field)
+                if isinstance(sub, list):
+                    sub = ", ".join(str(s) for s in sub[:2])
+                items.append({"id": d.get(id_field, ""), "name": name, "sub": sub or ""})
+            result[key] = {"count": len(data), "items": items}
+        except Exception as e:
+            result[key] = {"count": 0, "items": [], "error": str(e)}
+    return JSONResponse(result)
+
 
 if __name__ == "__main__":
     mcp.run(transport='sse')

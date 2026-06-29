@@ -39,33 +39,40 @@ def make_graph_query_fn(driver: Any) -> Any:
 def make_fetch_researcher_network_fn(driver: Any) -> Any:
     """
     연구자 네트워크 조회 콜백.
-    인터페이스: (researcher_name: str) -> list[dict[str, Any]]
+    인터페이스: (researcher_name: str, researcher_id: str) -> list[dict[str, Any]]
+    researcher_id 제공 시 ID 정확 매칭 (동명이인 방지), 미제공 시 이름 부분 일치.
     """
-    def fetch_researcher_network(researcher_name: str) -> list[dict[str, Any]]:
+    def fetch_researcher_network(researcher_name: str = "", researcher_id: str = "") -> list[dict[str, Any]]:
         t0 = time.perf_counter()
+        if researcher_id:
+            where_clause = "WHERE r.id = $rid"
+            params: dict[str, Any] = {"rid": researcher_id}
+            limit = 1
+        else:
+            where_clause = "WHERE r.name CONTAINS $name"
+            params = {"name": researcher_name}
+            limit = 10
+        cypher = f"""
+            MATCH (r:Researcher)
+            {where_clause}
+            OPTIONAL MATCH (r)-[:AUTHORED]->(p:Paper)
+            OPTIONAL MATCH (r)-[:INVENTED]->(pat:Patent)
+            OPTIONAL MATCH (r)-[:WORKS_AT]->(org:Organization)
+            OPTIONAL MATCH (r)-[:RESEARCHES]->(t:Technology)
+            RETURN
+                r.name   AS researcher,
+                r.id     AS researcher_id,
+                collect(DISTINCT p.title)[..5]   AS papers,
+                collect(DISTINCT pat.title)[..5] AS patents,
+                org.name AS organization,
+                collect(DISTINCT t.name)[..10]   AS technologies
+            LIMIT {limit}
+        """
         with driver.session() as session:
-            result = session.run(
-                """
-                MATCH (r:Researcher)
-                WHERE r.name CONTAINS $name
-                OPTIONAL MATCH (r)-[:AUTHORED]->(p:Paper)
-                OPTIONAL MATCH (r)-[:INVENTED]->(pat:Patent)
-                OPTIONAL MATCH (r)-[:WORKS_AT]->(org:Organization)
-                OPTIONAL MATCH (r)-[:RESEARCHES]->(t:Technology)
-                RETURN
-                    r.name   AS researcher,
-                    r.id     AS researcher_id,
-                    collect(DISTINCT p.title)[..5]   AS papers,
-                    collect(DISTINCT pat.title)[..5] AS patents,
-                    org.name AS organization,
-                    collect(DISTINCT t.name)[..10]   AS technologies
-                LIMIT 10
-                """,
-                name=researcher_name,
-            )
+            result = session.run(cypher, **params)
             rows: list[dict[str, Any]] = [dict(r.data()) for r in result]
-        logger.debug("[Neo4j] researcher_network '%s': %d rows  %.1f ms",
-                     researcher_name, len(rows), (time.perf_counter() - t0) * 1000)
+        logger.debug("[Neo4j] researcher_network id='%s' name='%s': %d rows  %.1f ms",
+                     researcher_id, researcher_name, len(rows), (time.perf_counter() - t0) * 1000)
         return rows
     return fetch_researcher_network
 
