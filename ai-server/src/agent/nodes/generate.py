@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
+    # 오케스트레이터가 범위 외로 판단한 경우 LLM 호출 없이 즉시 반환
+    if state.get("out_of_scope"):
+        messages = list(state["messages"])
+        _, _, current_msgs = get_turn_context(messages)
+        orch_msg = next(
+            (m for m in reversed(current_msgs) if getattr(m, "name", None) == "orchestrator"),
+            None,
+        )
+        reason = str(orch_msg.content).split("\n\n[")[0].strip() if orch_msg else ""
+        reply = "죄송합니다. 해당 질문은 R&D Nexus의 지원 범위를 벗어납니다.\n논문·특허·연구자·기술·R&D 과제에 관한 질문을 입력해 주세요."
+        if reason:
+            reply += f"\n\n({reason})"
+        logger.debug("[generate] out_of_scope — 안내 반환")
+        return {"messages": [AIMessage(content=reply, name="final_answer")]}
+
     settings = get_settings()
     model = RequestConfig.current().generate_model or settings.rnd_model
     llm = get_llm(model=model, streaming=True)
@@ -25,13 +40,10 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     if should_compact(messages, approx_tokens):
         llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
         compacted = await compact_messages(messages, llm_plain)
-        # 새롭게 반환된 compacted에 포함되지 않은 과거 메시지의 ID만 추려내어 삭제
         kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
         compaction_msgs = [RemoveMessage(id=m.id) for m in messages if getattr(m, "id", None) and m.id not in kept_ids]
-        # 새롭게 생성된 요약 메시지(compacted[0])만 상태에 추가
         compaction_msgs.append(compacted[0])
         messages = compacted
-
 
     prev_context, turn_start, current_msgs = get_turn_context(messages)
     current_human = [

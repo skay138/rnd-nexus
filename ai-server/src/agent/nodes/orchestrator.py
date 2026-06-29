@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 class OrchestratorPlan(BaseModel):
     reasoning: str       = Field(description="수집 현황 평가 및 다음 전략 (한국어)")
     tasks: list[str]     = Field(description="병렬 실행할 '자연어' 태스크 지시문 목록. 수집 완료 시 빈 리스트")
+    out_of_scope: bool   = Field(default=False, description="R&D 범위(논문·특허·연구자·기술·과제) 외 질문이면 true")
 
 
 _STRATEGY = """
@@ -83,8 +84,9 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
 <output_format>
 반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트는 절대 포함하지 마세요.
-{{"reasoning": "수집 현황 평가 및 전략 (한국어)", "tasks": ["태스크1", "태스크2"]}}
-수집 완료 시: {{"reasoning": "완료 이유", "tasks": []}}
+{{"reasoning": "...", "tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
+수집 완료 시: {{"reasoning": "완료 이유", "tasks": [], "out_of_scope": false}}
+범위 외 질문(레시피·날씨·일반상식 등): {{"reasoning": "범위 외 이유", "tasks": [], "out_of_scope": true}}
 </output_format>"""
 
     messages = list(state["messages"])
@@ -115,11 +117,13 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
 
     t0 = time.perf_counter()
+    out_of_scope = False
     try:
         raw = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant_messages)
         plan = OrchestratorPlan.model_validate_json(raw)
         tasks = plan.tasks
         reasoning = plan.reasoning
+        out_of_scope = plan.out_of_scope
     except Exception as e:
         logger.error("[orchestrator] structured output 실패: %s", e)
         tasks = []
@@ -129,12 +133,14 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     if tasks:
         task_lines = "\n".join(f"  - {t}" for t in tasks)
         msg_content = f"{reasoning}\n\n[계획한 태스크]\n{task_lines}"
+    elif out_of_scope:
+        msg_content = f"{reasoning}\n\n[범위 외 질문]"
     else:
         msg_content = f"{reasoning}\n\n[수집 완료 — 생성 단계 진행]"
 
     logger.debug(
-        "[orchestrator] iter=%d/%d elapsed=%.2fs tasks=%d\nreasoning: %s\ntasks:\n%s",
-        iteration_count + 1, max_iterations, elapsed, len(tasks),
+        "[orchestrator] iter=%d/%d elapsed=%.2fs tasks=%d out_of_scope=%s\nreasoning: %s\ntasks:\n%s",
+        iteration_count + 1, max_iterations, elapsed, len(tasks), out_of_scope,
         reasoning,
         "\n".join(f"  - {t}" for t in tasks) if tasks else "  (없음)",
     )
@@ -143,4 +149,5 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         "messages":        compaction_msgs + [AIMessage(content=msg_content, name="orchestrator")],
         "pending_tasks":   tasks,
         "iteration_count": iteration_count + 1,
+        "out_of_scope":    out_of_scope,
     }
