@@ -116,7 +116,7 @@ async def _run_worker(
 [태스크]가 최우선입니다. [원본 질문]은 태스크에 키워드가 생략되거나 지시대명사가 있을 때만 보충 참고하세요.
 충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.
 
-참고: 상세 정보가 필요하면 get_entities를 후속 호출하세요.""")
+엔티티 상세 정보(소속·전문분야·초록 등)가 필요하면 get_entities를 호출하라.""")
     if original_query:
         task_content = f"[원본 질문]\n{original_query}\n\n[태스크]\n{task}"
     else:
