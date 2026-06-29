@@ -124,7 +124,8 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         else:
             formatted_current.append(m)
 
-    # 날짜는 첫 번째 HumanMessage로 주입 — system_prompt 정적 유지로 KV prefix cache 보존
+    # 날짜를 HumanMessage로 주입 — 오케스트레이터는 JSON 구조화 출력이므로 persona break 위험 낮음
+    # system_prompt는 정적 유지 → KV prefix cache 최대 활용
     today = datetime.date.today().strftime("%Y년 %m월 %d일")
     date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
     relevant_messages = [date_msg] + prev_context + formatted_current

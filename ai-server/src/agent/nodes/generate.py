@@ -1,4 +1,3 @@
-import datetime
 import logging
 import re
 import time
@@ -49,17 +48,13 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         if getattr(m, "name", None) == "tool_results"
     ]
 
-    # 날짜는 HumanMessage로 주입 — system_prompt를 정적으로 유지해 KV prefix cache 보존
-    today = datetime.date.today().strftime("%Y년 %m월 %d일")
-    date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
-
     # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록, 엔티티 ID 기준 dedup)
     if current_tool_results:
         merged = build_deduped_context(current_tool_results)
         data_msg = HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")
-        relevant = [date_msg] + prev_context + current_human + [data_msg]
+        relevant = prev_context + current_human + [data_msg]
     else:
-        relevant = [date_msg] + prev_context + current_human
+        relevant = prev_context + current_human
 
     system_prompt = """<language>Korean</language>
 
