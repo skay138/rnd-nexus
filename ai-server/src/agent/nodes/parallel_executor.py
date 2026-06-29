@@ -56,31 +56,44 @@ def _clean_result(result_str: str) -> str:
 
 
 def _build_history_summary(state_tool_results: dict[str, list[str]]) -> str:
-    """이전 라운드들의 도구 실행 결과에서 엔티티 요약(ID 및 이름) 추출"""
-    entities_by_type = defaultdict(list)
-    seen_ids = set()
-    
+    """이전 라운드들의 도구 실행 결과에서 수집 엔티티 요약 + 빈 결과 검색 목록 반환"""
+    entities_by_type: dict[str, list[str]] = defaultdict(list)
+    seen_ids: set[str] = set()
+    empty_results: list[str] = []
+
     for tool_name, results in state_tool_results.items():
         for res in results:
-            for d in iter_entities(res):
-                ref = item_to_ref(d)
-                if not ref:
-                    continue
-                eid = ref["id"]
-                if not eid or eid in seen_ids:
-                    continue
-                seen_ids.add(eid)
-                entities_by_type[ref["type"]].append(f"{ref['title']} ({eid})")
-    
-    if not entities_by_type:
-        return ""
-        
-    lines = ["[이전 라운드 수집 데이터 요약]"]
-    for ntype, items in entities_by_type.items():
-        display_items = items[:15]
-        suffix = f" 외 {len(items)-15}건" if len(items) > 15 else ""
-        lines.append(f"- {ntype}: {', '.join(display_items)}{suffix}")
-    return "\n".join(lines)
+            entities = list(iter_entities(res))
+            if entities:
+                for d in entities:
+                    ref = item_to_ref(d)
+                    if not ref:
+                        continue
+                    eid = ref["id"]
+                    if not eid or eid in seen_ids:
+                        continue
+                    seen_ids.add(eid)
+                    entities_by_type[ref["type"]].append(f"{ref['title']} ({eid})")
+            elif not str(res).startswith("[ERROR]"):
+                # 빈 결과 — 어떤 도구에서 나왔는지만 기록 (중복 방지)
+                entry = f"{tool_name}: 빈 결과"
+                if entry not in empty_results:
+                    empty_results.append(entry)
+
+    lines: list[str] = []
+    if entities_by_type:
+        lines.append("[이전 라운드 수집 데이터 요약]")
+        for ntype, items in entities_by_type.items():
+            display_items = items[:15]
+            suffix = f" 외 {len(items)-15}건" if len(items) > 15 else ""
+            lines.append(f"- {ntype}: {', '.join(display_items)}{suffix}")
+
+    if empty_results:
+        lines.append("[이전 라운드에서 결과 없었던 검색 — 같은 방식 반복 금지]")
+        for e in empty_results[:10]:
+            lines.append(f"- {e}")
+
+    return "\n".join(lines) if lines else ""
 
 
 async def _run_worker(
@@ -148,7 +161,8 @@ async def _run_worker(
                     summarize_tool_result(result_str),
                 )
                 collected.append((tool_name, result_str))
-                messages.append(ToolMessage(content=result_str, tool_call_id=tc["id"]))
+                # LLM에게는 정제된 결과 전달 — raw MCP wrapper 제거로 이전 스텝 파악 용이
+                messages.append(ToolMessage(content=_clean_result(result_str), tool_call_id=tc["id"]))
                 if sse_queue is not None:
                     await sse_queue.put(("worker_result", {
                         "type":  "task_result",

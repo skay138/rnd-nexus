@@ -1,3 +1,4 @@
+import datetime
 import logging
 import time
 from pydantic import BaseModel, Field
@@ -123,7 +124,10 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         else:
             formatted_current.append(m)
 
-    relevant_messages = prev_context + formatted_current
+    # 날짜는 첫 번째 HumanMessage로 주입 — system_prompt 정적 유지로 KV prefix cache 보존
+    today = datetime.date.today().strftime("%Y년 %m월 %d일")
+    date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
+    relevant_messages = [date_msg] + prev_context + formatted_current
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
 

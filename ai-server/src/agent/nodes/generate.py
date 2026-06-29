@@ -1,3 +1,4 @@
+import datetime
 import logging
 import re
 import time
@@ -48,13 +49,17 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         if getattr(m, "name", None) == "tool_results"
     ]
 
+    # 날짜는 HumanMessage로 주입 — system_prompt를 정적으로 유지해 KV prefix cache 보존
+    today = datetime.date.today().strftime("%Y년 %m월 %d일")
+    date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
+
     # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록, 엔티티 ID 기준 dedup)
     if current_tool_results:
         merged = build_deduped_context(current_tool_results)
         data_msg = HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")
-        relevant = prev_context + current_human + [data_msg]
+        relevant = [date_msg] + prev_context + current_human + [data_msg]
     else:
-        relevant = prev_context + current_human
+        relevant = [date_msg] + prev_context + current_human
 
     system_prompt = """<language>Korean</language>
 
@@ -63,6 +68,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 제공된 데이터를 바탕으로 사용자 질문에 직접 답하세요.
 데이터에 없는 수치·사실·인물·기관은 절대 작성하지 마세요. 정보가 없거나 부족하면 "관련 정보를 찾을 수 없습니다"라고 답하세요.
 출처 표기나 참고문헌 목록은 작성하지 마세요.
+"관련성 낮은 주제", "수집 범위 외", "참고 사항" 같은 메타 섹션을 답변 끝에 추가하지 마세요. 질문에 대한 직접적인 답변만 작성하세요.
 </role>
 """
 
