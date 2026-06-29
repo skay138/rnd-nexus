@@ -6,7 +6,7 @@ from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-def get_llm(model: str, streaming: bool = False, **kwargs) -> BaseChatModel:
+def get_llm(model: str, streaming: bool = False, json_mode: bool = False, **kwargs) -> BaseChatModel:
     """
     공통 LLM 팩토리 함수.
     추후 Triton, vLLM, OpenAI 등 다양한 모델 제공자를 지원하기 위해 확장 가능하도록 설계되었습니다.
@@ -27,16 +27,20 @@ def get_llm(model: str, streaming: bool = False, **kwargs) -> BaseChatModel:
     if provider == "ollama":
         from langchain_ollama import ChatOllama
         return ChatOllama(
-            model=model, 
-            base_url=base_url, 
-            streaming=streaming, 
+            model=model,
+            base_url=base_url,
+            streaming=streaming,
+            format="json" if json_mode else None,
             **kwargs
         )
-        
+
     elif provider == "openai":
         # Triton, vLLM 등 OpenAI API 스펙을 호환하는 서버에서 사용
         try:
             from langchain_openai import ChatOpenAI
+            model_kwargs = kwargs.pop("model_kwargs", {})
+            if json_mode:
+                model_kwargs["response_format"] = {"type": "json_object"}
             return ChatOpenAI(
                 model=model,
                 base_url=base_url,
@@ -44,6 +48,7 @@ def get_llm(model: str, streaming: bool = False, **kwargs) -> BaseChatModel:
                 api_key=api_key or "EMPTY",
                 timeout=None,
                 max_tokens=kwargs.pop("max_tokens", 8192),
+                model_kwargs=model_kwargs,
                 **kwargs
             )
         except ImportError:
