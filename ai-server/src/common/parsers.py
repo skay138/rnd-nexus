@@ -77,40 +77,118 @@ def build_deduped_context(tool_result_messages: list) -> str:
     seen_other: set[str] = set()
     other_parts: list[str] = []
 
+    def process_block(lines: list[str]):
+        if not lines: return
+        result_str = "\n".join(lines).strip()
+        if not result_str or result_str.startswith("[ERROR]"):
+            return
+            
+        entities = list(iter_entities(result_str))
+        if entities:
+            added_any = False
+            for entity in entities:
+                ref = item_to_ref(entity)
+                eid = (ref["id"] if ref else "") or str(entity.get("id") or entity.get("entity_id", ""))
+                if not eid:
+                    continue
+                added_any = True
+                clean = _drop_internal_fields(entity)
+                
+                # 불필요한 스키마/중복 키 제거 (토큰 낭비 방지)
+                if ref:
+                    clean["id"] = ref["id"]
+                    clean["type"] = ref["type"]
+                    
+                    # 중복 ID 키 제거
+                    for k in ["researcher_id", "tech_id", "technology_id", "project_id", "patent_id", "org_id", "paper_id", "entity_id"]:
+                        if k in clean and clean[k] == clean["id"]:
+                            del clean[k]
+                            
+                    # node_type은 type으로 대체되었으므로 제거
+                    if "node_type" in clean:
+                        del clean["node_type"]
+                        
+                    # 중복 이름 키 제거
+                    primary_name = clean.get("title") or clean.get("name") or ref.get("title")
+                    if primary_name:
+                        for k in ["researcher", "technology", "project", "organization", "patent"]:
+                            if k in clean and clean[k] == primary_name:
+                                del clean[k]
+                                
+                    # name과 title이 동일하면 하나만 유지
+                    if "name" in clean and "title" in clean and clean["name"] == clean["title"]:
+                        del clean["name"]
+                        
+                # 서로 다른 타입(예: 논문 P001과 과제 P001)의 ID 충돌을 막기 위해 복합 키 사용
+                entity_type = clean.get("type", "Unknown")
+                unique_key = f"{entity_type}::{eid}"
+                
+                if unique_key in seen_ids:
+                    # 병합 로직 고도화: 단순 키 존재 여부가 아니라, 더 '풍부한' 데이터로 스마트 업데이트
+                    idx = seen_ids[unique_key]
+                    for k, v in clean.items():
+                        old_v = unique_entities[idx].get(k)
+                        # 1. 기존 값이 없거나 비어있으면 무조건 채움
+                        if not old_v:
+                            unique_entities[idx][k] = v
+                        # 2. 타입이 다를 경우 구조화된 데이터(list, dict)를 더 우선시함
+                        elif type(v) != type(old_v):
+                            if isinstance(v, (list, dict)):
+                                unique_entities[idx][k] = v
+                        # 3. 리스트인 경우 덮어쓰지 않고 중복 없이 병합(Union)하여 네트워크 관계 유실 방지
+                        elif isinstance(v, list) and isinstance(old_v, list):
+                            for item in v:
+                                if item not in old_v:
+                                    old_v.append(item)
+                        # 4. 딕셔너리인 경우 키 기준으로 병합
+                        elif isinstance(v, dict) and isinstance(old_v, dict):
+                            for sub_k, sub_v in v.items():
+                                if sub_k not in old_v:
+                                    old_v[sub_k] = sub_v
+                        # 5. 문자열일 경우 내용이 더 긴 상세 데이터로 덮어쓰기
+                        elif isinstance(v, str) and isinstance(old_v, str):
+                            if len(v) > len(old_v):
+                                unique_entities[idx][k] = v
+                else:
+                    seen_ids[unique_key] = len(unique_entities)
+                    unique_entities.append(clean)
+            # eid를 추출할 수 없는 엔티티만 있는 경우(run_graph_query Cypher 결과 등) → other_parts로 보존
+            if not added_any and result_str not in seen_other:
+                seen_other.add(result_str)
+                other_parts.append(result_str)
+        elif result_str not in seen_other:
+            seen_other.add(result_str)
+            other_parts.append(result_str)
+
     for msg in tool_result_messages:
         content = str(msg.content)
-        for section in content.split("\n\n---\n\n"):
-            for block in section.split("\n\n"):
-                lines = block.strip().splitlines()
-                tool_idx = next(
-                    (i for i, ln in enumerate(lines) if _TOOL_LINE_RE.match(ln.strip())),
-                    None,
-                )
-                if tool_idx is None:
-                    continue
-                result_str = "\n".join(lines[tool_idx + 1:]).strip()
-                if not result_str or result_str.startswith("[ERROR]"):
-                    continue
-                entities = list(iter_entities(result_str))
-                if entities:
-                    for entity in entities:
-                        ref = item_to_ref(entity)
-                        eid = (ref["id"] if ref else "") or str(entity.get("id") or entity.get("entity_id", ""))
-                        if not eid:
-                            continue
-                        clean = _drop_internal_fields(entity)
-                        if eid in seen_ids:
-                            # 기존 엔티티에 없는 필드만 추가 — 여러 도구 결과를 병합
-                            idx = seen_ids[eid]
-                            for k, v in clean.items():
-                                if k not in unique_entities[idx]:
-                                    unique_entities[idx][k] = v
-                        else:
-                            seen_ids[eid] = len(unique_entities)
-                            unique_entities.append(clean)
-                elif result_str not in seen_other:
-                    seen_other.add(result_str)
-                    other_parts.append(result_str)
+        current_tool_output = []
+        in_tool_block = False
+        
+        for line in content.splitlines():
+            line_stripped = line.strip()
+            # 태스크 구분선이나 제목은 무시
+            if line_stripped.startswith("---") or line_stripped.startswith("# "):
+                if current_tool_output:
+                    process_block(current_tool_output)
+                    current_tool_output = []
+                in_tool_block = False
+                continue
+                
+            # [tool_name] 마커 발견
+            if _TOOL_LINE_RE.match(line_stripped):
+                if current_tool_output:
+                    process_block(current_tool_output)
+                    current_tool_output = []
+                in_tool_block = True
+                continue
+                
+            if in_tool_block:
+                current_tool_output.append(line)
+                
+        # 마지막 블록 처리
+        if current_tool_output:
+            process_block(current_tool_output)
 
     parts: list[str] = []
     if unique_entities:
