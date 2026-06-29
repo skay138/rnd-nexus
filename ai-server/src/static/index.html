@@ -679,6 +679,7 @@
 
     var currentRound = 0;
     var taskToolsMap  = {};  // "round:task" → task-tools div
+    var roundElMap    = {};  // round → round div element (document.getElementById 중복 방지)
 
     function addRound(roundsBox, round, reasoning, tasks) {
       currentRound = round;
@@ -707,14 +708,16 @@
         '<div class="round-reasoning">' + escHtml(reasoning) + '</div>' +
         tasksHtml;
       roundsBox.appendChild(div);
-      // task → tools div 매핑 저장
+      // task → tools div 매핑 저장 (div.querySelectorAll 사용 — 복수 쿼리 시 ID 중복 방지)
+      roundElMap[round] = div;
+      var toolDivs = div.querySelectorAll('.task-tools');
       tasks.forEach(function(t, i) {
-        taskToolsMap[round + ':' + t] = document.getElementById('task-tools-' + round + '-' + i);
+        taskToolsMap[round + ':' + t] = toolDivs[i] || null;
       });
     }
 
     function markRoundDone(round) {
-      var roundEl = document.getElementById("round-" + round);
+      var roundEl = roundElMap[round];
       if (!roundEl) return;
       roundEl.querySelectorAll(".chip").forEach(function(c) { c.className = "chip done"; });
     }
@@ -748,6 +751,7 @@
       if (!queryText) return;
 
       taskToolsMap = {};  // 쿼리마다 초기화
+      roundElMap   = {};
 
       var btn        = document.getElementById("btn");
       btn.disabled   = true;

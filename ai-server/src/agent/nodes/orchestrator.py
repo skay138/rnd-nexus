@@ -116,18 +116,25 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
 
+    _MAX_RETRIES = 2
     t0 = time.perf_counter()
+    tasks = []
+    reasoning = ""
     out_of_scope = False
-    try:
-        raw = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant_messages)
-        plan = OrchestratorPlan.model_validate_json(raw)
-        tasks = plan.tasks
-        reasoning = plan.reasoning
-        out_of_scope = plan.out_of_scope
-    except Exception as e:
-        logger.error("[orchestrator] structured output 실패: %s", e)
-        tasks = []
-        reasoning = f"계획 수립 실패 ({type(e).__name__}) — 현재까지 수집된 데이터로 답변합니다."
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            raw = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant_messages)
+            plan = OrchestratorPlan.model_validate_json(raw)
+            tasks = plan.tasks
+            reasoning = plan.reasoning
+            out_of_scope = plan.out_of_scope
+            break
+        except Exception as e:
+            if attempt < _MAX_RETRIES:
+                logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s", attempt + 1, _MAX_RETRIES, e)
+            else:
+                logger.error("[orchestrator] structured output 최종 실패: %s", e)
+                reasoning = f"계획 수립 실패 ({type(e).__name__}) — 현재까지 수집된 데이터로 답변합니다."
     elapsed = time.perf_counter() - t0
 
     if tasks:

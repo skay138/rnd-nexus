@@ -26,7 +26,7 @@ def register_vector_tools(mcp: FastMCP) -> None:
 
         Args:
             query:         검색 쿼리 (자연어. 예: 'AI 반도체 저전력 설계 연구')
-            node_type:     노드 타입 필터 (Paper/Patent/Technology/Researcher/Project, 빈값=전체)
+            node_type:     노드 타입 필터 (Paper/Patent/Technology/Researcher/Project/Organization, 빈값=전체)
             top_k:         반환할 최대 결과 수
             dense_weight:  Dense 벡터 가중치 (0~1, 의미 유사도 중시 시 높게)
             sparse_weight: Sparse BM25 가중치 (0~1, 키워드 일치 중시 시 높게)

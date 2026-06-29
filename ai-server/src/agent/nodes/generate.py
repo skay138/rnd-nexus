@@ -17,18 +17,11 @@ logger = logging.getLogger(__name__)
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     # 오케스트레이터가 범위 외로 판단한 경우 LLM 호출 없이 즉시 반환
     if state.get("out_of_scope"):
-        messages = list(state["messages"])
-        _, _, current_msgs = get_turn_context(messages)
-        orch_msg = next(
-            (m for m in reversed(current_msgs) if getattr(m, "name", None) == "orchestrator"),
-            None,
-        )
-        reason = str(orch_msg.content).split("\n\n[")[0].strip() if orch_msg else ""
-        reply = "죄송합니다. 해당 질문은 R&D Nexus의 지원 범위를 벗어납니다.\n논문·특허·연구자·기술·R&D 과제에 관한 질문을 입력해 주세요."
-        if reason:
-            reply += f"\n\n({reason})"
         logger.debug("[generate] out_of_scope — 안내 반환")
-        return {"messages": [AIMessage(content=reply, name="final_answer")]}
+        return {"messages": [AIMessage(
+            content="죄송합니다. 해당 질문은 R&D 서비스의 지원 범위를 벗어납니다.\n논문·특허·연구자·기술·R&D 과제에 관한 질문을 입력해 주세요.",
+            name="final_answer",
+        )]}
 
     settings = get_settings()
     model = RequestConfig.current().generate_model or settings.rnd_model
@@ -67,8 +60,8 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
 
 <role>
 당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
-[tool_results] 메시지에 수집된 데이터가 있습니다. 이 데이터를 바탕으로 사용자 질문에 직접 답하세요.
-수집된 데이터에 없는 수치·사실·인물·기관은 절대 작성하지 마세요. 데이터가 부족하면 "수집된 데이터 내에서는 확인되지 않습니다"로 명시하세요.
+제공된 데이터를 바탕으로 사용자 질문에 직접 답하세요.
+데이터에 없는 수치·사실·인물·기관은 절대 작성하지 마세요. 정보가 없거나 부족하면 "관련 정보를 찾을 수 없습니다"라고 답하세요.
 출처 표기나 참고문헌 목록은 작성하지 마세요.
 </role>
 """

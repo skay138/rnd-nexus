@@ -6,6 +6,12 @@ from typing import Any
 # tool_results 메시지 내 툴명 줄 패턴: [semantic_search], [get_entities] 등
 _TOOL_LINE_RE = re.compile(r'^\[[a-z_]+\]$')
 
+# 벡터 검색 내부 필드 — LLM 컨텍스트에서 제외 (도메인 메트릭으로 오해 방지)
+_SEARCH_INTERNAL_FIELDS = {"score", "distance", "dense_score", "sparse_score"}
+
+def _drop_internal_fields(entity: dict) -> dict:
+    return {k: v for k, v in entity.items() if k not in _SEARCH_INTERNAL_FIELDS}
+
 def try_parse(s: str) -> Any:
     """JSON 우선, 실패 시 ast.literal_eval로 파싱."""
     try:
@@ -93,7 +99,7 @@ def build_deduped_context(tool_result_messages: list) -> str:
                         if not eid or eid in seen_ids:
                             continue
                         seen_ids.add(eid)
-                        unique_entities.append(entity)
+                        unique_entities.append(_drop_internal_fields(entity))
                 elif result_str not in seen_other:
                     seen_other.add(result_str)
                     other_parts.append(result_str)
