@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class OrchestratorPlan(BaseModel):
     reasoning: str       = Field(description="수집 현황 평가 및 다음 전략 (한국어)")
     tasks: list[str]     = Field(description="병렬 실행할 '자연어' 태스크 지시문 목록. 수집 완료 시 빈 리스트")
-    out_of_scope: bool   = Field(default=False, description="R&D 범위(논문·특허·연구자·기술·과제) 외 질문이면 true")
+    out_of_scope: bool   = Field(default=False, description="R&D 범위(논문·특허·연구자·기술·과제·용어) 외 질문이면 true")
 
 
 _STRATEGY = """
