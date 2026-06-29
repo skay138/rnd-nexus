@@ -38,7 +38,7 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         compaction_msgs.append(compacted[0])
         messages = compacted
 
-    prev_context, turn_start, current_msgs = get_turn_context(messages)
+    prev_context, turn_start, current_msgs, prev_tool_results = get_turn_context(messages)
     current_human = [
         m for m in current_msgs
         if getattr(m, "type", None) == "human" and not getattr(m, "name", None)
@@ -48,11 +48,16 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         if getattr(m, "name", None) == "tool_results"
     ]
 
-    # tool_results → 단일 HumanMessage (대화가 human turn으로 끝나도록, 엔티티 ID 기준 dedup)
     if current_tool_results:
+        # 이번 턴에 수집된 데이터가 있으면 그것만 사용
         merged = build_deduped_context(current_tool_results)
         data_msg = HumanMessage(content=f"[수집된 데이터]\n{merged}", name="tool_results")
         relevant = prev_context + current_human + [data_msg]
+    elif prev_tool_results:
+        # 오케스트레이터가 이전 턴 데이터로 충분하다 판단해 수집 스킵 → prev 데이터로 fallback
+        prev_merged = build_deduped_context(prev_tool_results)
+        prev_data_msg = HumanMessage(content=f"[수집된 데이터]\n{prev_merged}", name="tool_results")
+        relevant = prev_context + current_human + [prev_data_msg]
     else:
         relevant = prev_context + current_human
 

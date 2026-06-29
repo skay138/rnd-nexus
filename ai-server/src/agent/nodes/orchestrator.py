@@ -7,6 +7,7 @@ from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, Hum
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm, llm_ainvoke
 from common.config.query_config import RequestConfig
+from common.parsers import build_deduped_context
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
 from config import get_settings
@@ -93,7 +94,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         compaction_msgs.append(compacted[0])
         messages = compacted
 
-    prev_context, turn_start, current_msgs = get_turn_context(messages)
+    prev_context, turn_start, current_msgs, prev_tool_results = get_turn_context(messages)
     formatted_current = []
     for m in current_msgs:
         if getattr(m, "name", None) == "tool_results":
@@ -117,7 +118,15 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     # system_prompt는 정적 유지 → KV prefix cache 최대 활용
     today = datetime.date.today().strftime("%Y년 %m월 %d일")
     date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
-    relevant_messages = [date_msg] + prev_context + formatted_current
+
+    # 이전 턴에서 수집된 raw 데이터를 compact summary로 주입
+    # — 오케스트레이터가 이미 수집된 엔티티를 파악해 중복 태스크 방지
+    if prev_tool_results:
+        prev_data = build_deduped_context(prev_tool_results)
+        prev_data_msg = HumanMessage(content=f"[이전 대화 수집 데이터]\n{prev_data}", name="tool_results")
+        relevant_messages = [date_msg, prev_data_msg] + prev_context + formatted_current
+    else:
+        relevant_messages = [date_msg] + prev_context + formatted_current
 
     # json_mode=True: Ollama → format="json", OpenAI 호환 → response_format=json_object
     # <think> 블록 제거는 llm_ainvoke가 담당 (with_structured_output은 <think> 처리 불가)
