@@ -131,7 +131,9 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     relevant_messages = [date_msg] + prev_context + formatted_current
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
-    structured_llm = llm.with_structured_output(OrchestratorPlan)
+    # method="json_mode": OpenAI 호환 서버(Triton/vLLM)는 json_schema 미지원, json_object만 지원
+    # Ollama는 format="json"으로 동일하게 처리됨
+    structured_llm = llm.with_structured_output(OrchestratorPlan, method="json_mode")
 
     _MAX_RETRIES = 2
     t0 = time.perf_counter()
