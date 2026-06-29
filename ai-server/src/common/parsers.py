@@ -46,19 +46,19 @@ def iter_entities(result_str: str):
 def item_to_ref(d: dict) -> dict | None:
     """엔티티 딕셔너리를 프론트엔드 레퍼런스 포맷으로 변환."""
     if "paper_id" in d:
-        return {"type": "논문", "id": d["paper_id"], "title": d.get("title", "")}
+        return {"type": "Paper", "id": d["paper_id"], "title": d.get("title", "")}
     if "patent_id" in d:
-        return {"type": "특허", "id": d["patent_id"], "title": d.get("title", "")}
+        return {"type": "Patent", "id": d["patent_id"], "title": d.get("title", "")}
     if "researcher_id" in d:
-        return {"type": "연구자", "id": d["researcher_id"], "title": d.get("name", d.get("researcher", ""))}
+        return {"type": "Researcher", "id": d["researcher_id"], "title": d.get("name", d.get("researcher", ""))}
     if "tech_id" in d:
-        return {"type": "기술", "id": d["tech_id"], "title": d.get("name", "")}
+        return {"type": "Technology", "id": d["tech_id"], "title": d.get("name", "")}
     if "technology_id" in d:
-        return {"type": "기술", "id": d["technology_id"], "title": d.get("name", "")}
+        return {"type": "Technology", "id": d["technology_id"], "title": d.get("name", "")}
     if "project_id" in d:
-        return {"type": "과제", "id": d["project_id"], "title": d.get("title", d.get("name", ""))}
+        return {"type": "Project", "id": d["project_id"], "title": d.get("title", d.get("name", ""))}
     if "org_id" in d:
-        return {"type": "기관", "id": d["org_id"], "title": d.get("name", "")}
+        return {"type": "Organization", "id": d["org_id"], "title": d.get("name", "")}
     if "node_type" in d:
         return {
             "type": d["node_type"],
