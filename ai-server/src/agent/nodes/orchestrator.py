@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Any
 from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from common.llm import get_llm, llm_ainvoke
+from common.llm import get_llm
 from common.config.query_config import RequestConfig
 from agent.utils.context import get_turn_context
 from agent.state import RDAgentState
@@ -81,7 +81,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 - 현재 라운드: {iteration_count + 1} / {max_iterations}
 - 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요
 - 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요.
-- reasoning은 [수집된 데이터]에 명시된 사실만 근거로 작성하라. 데이터에 없는 기관·인물·관계·소속을 유추하거나 창작하지 마라.
+- reasoning은 [수집된 데이터]에 명시된 사실만 근거로 작성하라. 데이터에 없는 기관·인물·관계·수치를 유추·창작하지 마라. 데이터가 없으면 수집 전략만 기술하라.
 </constraints>
 
 <output_format>
@@ -131,23 +131,24 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     relevant_messages = [date_msg] + prev_context + formatted_current
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model)
+    structured_llm = llm.with_structured_output(OrchestratorPlan)
 
     _MAX_RETRIES = 2
     t0 = time.perf_counter()
     tasks = []
     reasoning = ""
     out_of_scope = False
+    invoke_msgs = [SystemMessage(content=system_prompt)] + relevant_messages
     for attempt in range(_MAX_RETRIES + 1):
         try:
-            raw = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant_messages)
-            plan = OrchestratorPlan.model_validate_json(raw)
+            plan: OrchestratorPlan = await structured_llm.ainvoke(invoke_msgs)
             tasks = plan.tasks
             reasoning = plan.reasoning
             out_of_scope = plan.out_of_scope
             break
         except Exception as e:
             if attempt < _MAX_RETRIES:
-                logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s", attempt + 1, _MAX_RETRIES, e)
+                logger.warning("[orchestrator] structured output 실패, 재시도 (%d/%d): %s", attempt + 1, _MAX_RETRIES, e)
             else:
                 logger.error("[orchestrator] structured output 최종 실패: %s", e)
                 reasoning = f"계획 수립 실패 ({type(e).__name__}) — 현재까지 수집된 데이터로 답변합니다."
