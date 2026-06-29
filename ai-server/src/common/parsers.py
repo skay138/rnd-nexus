@@ -50,7 +50,7 @@ def item_to_ref(d: dict) -> dict | None:
     if "patent_id" in d:
         return {"type": "특허", "id": d["patent_id"], "title": d.get("title", "")}
     if "researcher_id" in d:
-        return {"type": "연구자", "id": d["researcher_id"], "title": d.get("name", "")}
+        return {"type": "연구자", "id": d["researcher_id"], "title": d.get("name", d.get("researcher", ""))}
     if "tech_id" in d:
         return {"type": "기술", "id": d["tech_id"], "title": d.get("name", "")}
     if "technology_id" in d:
