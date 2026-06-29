@@ -72,7 +72,7 @@ def build_deduped_context(tool_result_messages: list) -> str:
     tool_results AIMessage 목록에서 엔티티를 ID 기준 dedup하여 단일 컨텍스트 반환.
     엔티티가 없는 결과(그래프 쿼리 등)는 문자열 중복 제거 후 그대로 보존.
     """
-    seen_ids: set[str] = set()
+    seen_ids: dict[str, int] = {}  # id → unique_entities 인덱스
     unique_entities: list[dict] = []
     seen_other: set[str] = set()
     other_parts: list[str] = []
@@ -96,10 +96,18 @@ def build_deduped_context(tool_result_messages: list) -> str:
                     for entity in entities:
                         ref = item_to_ref(entity)
                         eid = (ref["id"] if ref else "") or str(entity.get("id") or entity.get("entity_id", ""))
-                        if not eid or eid in seen_ids:
+                        if not eid:
                             continue
-                        seen_ids.add(eid)
-                        unique_entities.append(_drop_internal_fields(entity))
+                        clean = _drop_internal_fields(entity)
+                        if eid in seen_ids:
+                            # 기존 엔티티에 없는 필드만 추가 — 여러 도구 결과를 병합
+                            idx = seen_ids[eid]
+                            for k, v in clean.items():
+                                if k not in unique_entities[idx]:
+                                    unique_entities[idx][k] = v
+                        else:
+                            seen_ids[eid] = len(unique_entities)
+                            unique_entities.append(clean)
                 elif result_str not in seen_other:
                     seen_other.add(result_str)
                     other_parts.append(result_str)
