@@ -35,8 +35,8 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
         compaction_msgs.append(compacted[0])
         messages = compacted
 
-    # tool_results JSON 마커 스킵 — AIMessage(tool_calls)+ToolMessage 쌍은 그대로 포함
-    relevant = [m for m in messages if getattr(m, "name", None) != "tool_results"]
+    # orchestrator(계획 메타데이터)·tool_results(JSON 마커) 제외 — AIMessage(tool_calls)+ToolMessage 쌍은 그대로 포함
+    relevant = [m for m in messages if getattr(m, "name", None) not in ("tool_results", "orchestrator")]
 
     system_prompt = """<role>
 당신은 R&D 전문 AI 어시스턴트입니다. 답변은 한국어로 작성하세요.
