@@ -81,6 +81,15 @@ _DDL_STATEMENTS = [
         FOREIGN KEY (tech_id) REFERENCES technologies(tech_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
 
+    """CREATE TABLE IF NOT EXISTS organizations (
+        org_id     VARCHAR(64)  NOT NULL,
+        name       VARCHAR(255) NOT NULL,
+        full_name  VARCHAR(512),
+        type       VARCHAR(64),
+        location   VARCHAR(255),
+        PRIMARY KEY (org_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+
 ]
 
 def _parse_url(mariadb_url: str) -> Dict[str, Any]:
@@ -157,7 +166,8 @@ def seed_from_fixtures(mariadb_url: str, fixtures_dir: str, clear: bool = False)
         with conn.cursor() as cur:
             if clear:
                 for tbl in ["paper_authors", "papers", "patents", "projects",
-                             "researchers", "tech_key_players", "technologies"]:
+                             "researchers", "tech_key_players", "technologies",
+                             "organizations"]:
                     cur.execute(f"DELETE FROM {tbl}")
                 logger.info("기존 시드 데이터 삭제 완료")
 
@@ -221,6 +231,15 @@ def seed_from_fixtures(mariadb_url: str, fixtures_dir: str, clear: bool = False)
                         "INSERT IGNORE INTO tech_key_players (tech_id, player_name) VALUES (%s,%s)",
                         (t["tech_id"], player),
                     )
+
+            organizations = json.loads((base / "organizations.json").read_text(encoding="utf-8"))
+            for o in organizations:
+                cur.execute(
+                    "INSERT INTO organizations (org_id, name, full_name, type, location) "
+                    "VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE "
+                    "name=VALUES(name), full_name=VALUES(full_name), location=VALUES(location)",
+                    (o["org_id"], o["name"], o.get("full_name"), o.get("type"), o.get("location")),
+                )
 
         conn.commit()
         logger.info("MariaDB 시드 완료")

@@ -21,10 +21,16 @@ class OrchestratorPlan(BaseModel):
     out_of_scope: bool   = Field(default=False, description="R&D와 전혀 무관한 일상 대화, 날씨, 단순 번역, 코딩 질문이면 true. 논문·특허·연구자·기술·과제나 R&D 용어 및 개념 질문은 false")
 
 
+_DEPENDENCY_SIGNALS = (
+    "검색된", "찾은", "조회된", "수집된", "발견된",
+    "위의", "앞서", "이전 결과", "이전 단계", "위에서",
+)
+
 _STRATEGY = """
 <instructions>
 - 서로 독립적인 태스크는 같은 라운드에 묶어 병렬 실행하세요.
 - 어떤 태스크의 결과(ID, 식별자 등)가 다음 태스크의 입력으로 필요하면 절대 분리하지 말고 하나의 태스크로 합치세요. 워커는 태스크 내부에서 순차 작업을 자율 처리합니다.
+- 태스크 설명에 "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" 같은 표현이 들어 있으면 이전 태스크 결과에 의존한다는 신호입니다 — 반드시 앞 태스크와 하나로 합쳐야 합니다.
 - 동일한 사용자 입력(이름, 키워드)만 사용하는 태스크는 독립이므로 병렬 실행하세요.
 - 이전 도구 호출 결과를 보고 충분한 데이터가 수집됐으면 tasks=[]로 종료하고, 부족하면 다른 관점·키워드로 추가 태스크를 계획하세요.
 - 각 태스크에는 사용자 질문의 핵심 키워드(이름, ID 등)를 반드시 포함하세요.
@@ -33,16 +39,32 @@ _STRATEGY = """
 </instructions>
 
 <examples>
-✗ 잘못된 분리 (앞 태스크 결과에 의존):
+✗ 잘못된 분리 ("검색된"이 의존성 신호 — 앞 태스크 결과 없이 실행 불가):
+["PIM 기술로 과제를 검색하세요", "검색된 PIM 과제와 연결된 주요 기관을 조회하세요"]
 ["홍길동 연구자를 검색하세요", "검색된 ID로 상세 정보를 조회하세요"]
 
-✓ 올바른 예시 1 — 검색→조회를 하나의 태스크로:
+✓ 올바른 예시 1 — 의존 순서가 있으면 하나의 태스크로:
+["PIM 기술로 과제를 검색하고, 검색된 과제와 연결된 주요 기관을 조회하여 기관별 현황을 비교하세요."]
 ["홍길동 연구자의 상세 프로필을 조사하세요. 필요하면 검색하여 ID를 찾고 상세 정보를 조회하세요."]
 
 ✓ 올바른 예시 2 — 동일 입력이므로 병렬 실행:
 ["홍길동 연구자의 논문을 조사하세요", "홍길동 연구자의 특허를 조사하세요", "홍길동 연구자의 연구과제를 조사하세요"]
 </examples>
 """
+
+
+def _merge_dependent_tasks(tasks: list[str]) -> list[str]:
+    """앞 태스크 결과에 의존하는 태스크를 이전 태스크와 자동 병합."""
+    if len(tasks) <= 1:
+        return tasks
+    merged = [tasks[0]]
+    for task in tasks[1:]:
+        if any(sig in task for sig in _DEPENDENCY_SIGNALS):
+            logger.warning("[orchestrator] 의존성 태스크 감지 → 이전 태스크와 병합: %.50s…", task)
+            merged[-1] = f"{merged[-1]} 그리고 {task}"
+        else:
+            merged.append(task)
+    return merged
 
 
 def _make_task_id(description: str) -> str:
@@ -131,7 +153,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
         try:
             raw = await llm_ainvoke(llm, invoke_msgs)
             plan = OrchestratorPlan.model_validate_json(raw)
-            tasks = plan.tasks
+            tasks = _merge_dependent_tasks(plan.tasks)
             reasoning = plan.reasoning
             out_of_scope = plan.out_of_scope
             break

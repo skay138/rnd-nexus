@@ -48,15 +48,15 @@
     }
     .brand-title { font-size: 0.95rem; font-weight: 600; color: #f0f4ff; }
     .header-actions { display: flex; align-items: center; gap: 0.6rem; }
-    .session-info { color: #2d3148; font-size: 0.7rem; }
+    .session-info { color: #64748b; font-size: 0.75rem; }
     .session-id { color: #7c3aed; font-family: monospace; }
     .btn-ghost {
       background: transparent;
-      border: 1px solid #1e2235;
+      border: 1px solid #2d3148;
       border-radius: 6px;
-      color: #4a5568;
+      color: #8892a4;
       cursor: pointer;
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       padding: 0.18rem 0.5rem;
       text-decoration: none;
       transition: border-color 0.2s, color 0.2s;
@@ -74,7 +74,7 @@
     }
     .chat:empty::after {
       content: "자유롭게 R&D 관련 질문을 입력하세요.";
-      color: #2d3148;
+      color: #4a5568;
       font-size: 0.85rem;
       text-align: center;
       margin: auto;
@@ -96,8 +96,8 @@
       background: #131621;
       border: 1px solid #1e2235;
       border-radius: 10px;
-      color: #cbd5e1;
-      font-size: 0.875rem;
+      color: #d1d9e6;
+      font-size: 0.93rem;
       line-height: 1.85;
       padding: 0.85rem 1.1rem;
       word-break: break-word;
@@ -110,9 +110,11 @@
     }
 
     /* ── Markdown ────────────────────────────────────────────────── */
-    .msg-body h3 { color: #f0f4ff; font-size: 1rem;    font-weight: 600; margin: 1rem 0 0.3rem; }
-    .msg-body h4 { color: #e2e8f0; font-size: 0.92rem; font-weight: 600; margin: 0.8rem 0 0.3rem; }
-    .msg-body h5 { color: #a5b4fc; font-size: 0.85rem; font-weight: 600; margin: 0.7rem 0 0.25rem; }
+    .msg-body h1 { color: #f0f4ff; font-size: 1.4rem;  font-weight: 700; margin: 1.2rem 0 0.4rem; }
+    .msg-body h2 { color: #f0f4ff; font-size: 1.18rem; font-weight: 700; margin: 1.1rem 0 0.35rem; border-bottom: 1px solid #1e2235; padding-bottom: 0.2rem; }
+    .msg-body h3 { color: #f0f4ff; font-size: 1.05rem; font-weight: 600; margin: 1rem 0 0.3rem; }
+    .msg-body h4 { color: #e2e8f0; font-size: 0.97rem; font-weight: 600; margin: 0.8rem 0 0.3rem; }
+    .msg-body h5 { color: #a5b4fc; font-size: 0.93rem; font-weight: 600; margin: 0.7rem 0 0.25rem; }
     .msg-body p  { margin: 0.3rem 0; }
     .msg-body strong { color: #e2e8f0; font-weight: 600; }
     .msg-body em     { color: #a5b4fc; font-style: italic; }
@@ -144,6 +146,10 @@
     }
     .msg-body hr { border: none; border-top: 1px solid #1e2235; margin: 0.6rem 0; }
     .msg-body .md-br { display: block; height: 0.4em; }
+    .msg-body table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: 0.87em; overflow-x: auto; display: block; }
+    .msg-body th, .msg-body td { border: 1px solid #2d3148; padding: 0.38rem 0.75rem; text-align: left; white-space: nowrap; }
+    .msg-body th { background: #0d0f1a; color: #c7d2fe; font-weight: 600; }
+    .msg-body tr:nth-child(even) td { background: #0d0f1a55; }
 
     .cursor {
       color: #7c3aed;
@@ -170,8 +176,8 @@
       background: #0d0f1a;
       cursor: pointer;
       user-select: none;
-      font-size: 0.73rem;
-      color: #4a5568;
+      font-size: 0.78rem;
+      color: #8892a4;
       list-style: none;
       transition: color 0.2s;
     }
@@ -187,10 +193,10 @@
     .thinking-block[open] .thinking-chevron { transform: rotate(90deg); }
 
     .thinking-round-badge {
-      background: #7c3aed18;
-      border: 1px solid #7c3aed33;
+      background: #7c3aed22;
+      border: 1px solid #7c3aed55;
       border-radius: 3px;
-      color: #7c3aed99;
+      color: #a78bfa;
       font-size: 0.62rem;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -206,8 +212,8 @@
       border-top: 1px solid #1e2235;
     }
     .thinking-reasoning {
-      color: #3d4a5c;
-      font-size: 0.74rem;
+      color: #6b7a8d;
+      font-size: 0.8rem;
       line-height: 1.6;
       margin-bottom: 0.5rem;
       font-style: italic;
@@ -221,8 +227,8 @@
       gap: 0.2rem;
     }
     .task-desc {
-      color: #64748b;
-      font-size: 0.73rem;
+      color: #8892a4;
+      font-size: 0.78rem;
       line-height: 1.45;
     }
     .task-tools { display: flex; flex-wrap: wrap; gap: 0.25rem; min-height: 0.3rem; }
@@ -231,7 +237,7 @@
       border: 1px solid #1a4030;
       border-radius: 3px;
       color: #6ee7b7;
-      font-size: 0.65rem;
+      font-size: 0.73rem;
       padding: 0.08rem 0.42rem;
       font-family: monospace;
     }
@@ -245,9 +251,9 @@
       border-radius: 8px;
     }
     .ref-label {
-      font-size: 0.62rem;
+      font-size: 0.7rem;
       font-weight: 700;
-      color: #2d3148;
+      color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       margin-bottom: 0.38rem;
@@ -255,7 +261,7 @@
     .ref-items { display: flex; flex-wrap: wrap; gap: 0.28rem; }
     .ref-item {
       border-radius: 4px;
-      font-size: 0.68rem;
+      font-size: 0.75rem;
       font-family: monospace;
       padding: 0.12rem 0.48rem;
       border: 1px solid;
@@ -280,7 +286,7 @@
     .btn-toggle-settings {
       background: transparent;
       border: none;
-      color: #2d3148;
+      color: #64748b;
       font-size: 0.7rem;
       cursor: pointer;
       align-self: flex-start;
@@ -302,7 +308,7 @@
       gap: 0.75rem;
     }
     .setting-group { display: flex; flex-direction: column; gap: 0.28rem; }
-    .setting-group label { font-size: 0.67rem; color: #4a5568; font-weight: 600; }
+    .setting-group label { font-size: 0.75rem; color: #8892a4; font-weight: 600; }
     .setting-group input {
       background: #0f1117;
       border: 1px solid #2d3148;
@@ -356,10 +362,10 @@
     .example-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
     .example-chip {
       background: transparent;
-      border: 1px solid #1e2235;
+      border: 1px solid #2d3148;
       border-radius: 999px;
-      color: #4a5568;
-      font-size: 0.7rem;
+      color: #64748b;
+      font-size: 0.75rem;
       padding: 0.22rem 0.65rem;
       cursor: pointer;
       transition: all 0.2s;
@@ -374,7 +380,7 @@
       padding-top: 0.1rem;
     }
     .footer-strip a {
-      color: #1e2235;
+      color: #4a5568;
       font-size: 0.68rem;
       text-decoration: none;
       transition: color 0.2s;
@@ -399,7 +405,7 @@
       overflow: hidden;
     }
     .data-catalog summary {
-      color: #2d3148;
+      color: #64748b;
       cursor: pointer;
       font-size: 0.68rem;
       user-select: none;
@@ -416,9 +422,9 @@
     .data-catalog[open] summary::before { content: "▾"; }
     .catalog-count {
       background: #0f1117;
-      border: 1px solid #1e2235;
+      border: 1px solid #2d3148;
       border-radius: 3px;
-      color: #2d3148;
+      color: #64748b;
       font-size: 0.62rem;
       padding: 0.03rem 0.32rem;
     }
@@ -431,9 +437,9 @@
       border-top: 1px solid #1e2235;
     }
     .catalog-col { display: flex; flex-direction: column; gap: 0.28rem; }
-    .catalog-heading { color: #2d3148; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+    .catalog-heading { color: #64748b; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
     .catalog-tags { display: flex; flex-direction: column; gap: 0.12rem; }
-    .ctag { color: #2d3148; font-size: 0.65rem; line-height: 1.4; }
+    .ctag { color: #4a5568; font-size: 0.72rem; line-height: 1.4; }
     .ctag::before { content: "· "; }
   </style>
 </head>
@@ -612,12 +618,34 @@
       return s;
     }
 
+    function splitTableRow(line) {
+      return line.replace(/^\||\|$/g, "").split("|");
+    }
+
     function renderMarkdown(text) {
       var lines = text.split("\n");
       var html  = "";
       var i = 0;
       while (i < lines.length) {
         var line = lines[i];
+
+        // table
+        if (/^\|.+\|/.test(line) && i + 1 < lines.length && /^\|[\s\-:|]+\|/.test(lines[i + 1])) {
+          var headers = splitTableRow(line);
+          i += 2; // skip header + separator
+          html += "<table><thead><tr>" +
+            headers.map(function(c) { return "<th>" + inlineRender(escHtml(c.trim())) + "</th>"; }).join("") +
+            "</tr></thead><tbody>";
+          while (i < lines.length && /^\|/.test(lines[i])) {
+            var cells = splitTableRow(lines[i]);
+            html += "<tr>" +
+              cells.map(function(c) { return "<td>" + inlineRender(escHtml(c.trim())) + "</td>"; }).join("") +
+              "</tr>";
+            i++;
+          }
+          html += "</tbody></table>";
+          continue;
+        }
 
         // fenced code block
         if (line.startsWith("```")) {

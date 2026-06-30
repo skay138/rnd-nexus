@@ -40,8 +40,12 @@ class RepositoryFactory:
 
     def get_organization_repository(self) -> OrganizationRepository:
         if self._organization_repo is None:
-            from infrastructure.repositories.organization_repository import InMemoryOrganizationRepository
-            self._organization_repo = InMemoryOrganizationRepository()
+            if self.is_mariadb:
+                from infrastructure.repositories.organization_repository import MariaDBOrganizationRepository
+                self._organization_repo = MariaDBOrganizationRepository(self.db_pool)
+            else:
+                from infrastructure.repositories.organization_repository import InMemoryOrganizationRepository
+                self._organization_repo = InMemoryOrganizationRepository()
         return self._organization_repo
 
     def get_paper_repository(self) -> PaperRepository:

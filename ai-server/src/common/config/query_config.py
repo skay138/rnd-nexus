@@ -13,8 +13,8 @@ from typing import Any, ClassVar, Optional, Protocol, runtime_checkable
 CONFIG_DEFAULTS: dict[str, Any] = {
     "temperature":     0.0,
     "semantic_top_k":  20,
-    "dense_weight":    0.3,
-    "sparse_weight":   0.7,
+    "dense_weight":    0.5,
+    "sparse_weight":   0.5,
 }
 
 

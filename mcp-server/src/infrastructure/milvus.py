@@ -35,8 +35,8 @@ def make_vector_search_fn(
         query: str,
         node_type: str = "",
         top_k: int = 20,
-        dense_weight: float = 0.3,
-        sparse_weight: float = 0.7,
+        dense_weight: float = 0.5,
+        sparse_weight: float = 0.5,
     ) -> list[tuple[str, float, str, str]]:
         from pymilvus import AnnSearchRequest, WeightedRanker
 
@@ -79,6 +79,7 @@ def make_vector_search_fn(
             results = client.search(
                 collection_name=collection_name,
                 data=[vector],
+                anns_field="dense",
                 limit=top_k,
                 filter=expr or None,
                 output_fields=["id", "node_type", "name"],

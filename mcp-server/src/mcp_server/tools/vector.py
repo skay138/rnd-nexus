@@ -16,8 +16,8 @@ def register_vector_tools(mcp: FastMCP) -> None:
         query: str,
         node_type: str = "",
         top_k: int = 20,
-        dense_weight: float = 0.3,
-        sparse_weight: float = 0.7,
+        dense_weight: float = 0.5,
+        sparse_weight: float = 0.5,
     ) -> list[dict[str, Any]]:
         """
         특정 타입의 엔티티 목록을 시맨틱 검색으로 가져올 때 사용합니다.
