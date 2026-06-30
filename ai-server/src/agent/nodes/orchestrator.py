@@ -111,7 +111,8 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트는 절대 포함하지 마세요.
 {{"reasoning": "...", "tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
 수집 완료 시: {{"reasoning": "완료 이유", "tasks": [], "out_of_scope": false}}
-범위 외 질문(레시피·날씨·일반상식·단순번역·코딩 등): {{"reasoning": "범위 외 이유", "tasks": [], "out_of_scope": true}}
+범위 외 질문(레시피·날씨·단순번역·코딩 등): {{"reasoning": "범위 외 이유", "tasks": [], "out_of_scope": true}}
+R&D 용어·개념 질문: {{"reasoning": "용어 설명 요청 — 데이터 수집 불필요", "tasks": [], "out_of_scope": false}}
 </output_format>"""
 
     messages = list(state["messages"])

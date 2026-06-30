@@ -146,10 +146,12 @@ rnd-nexus/
 │       │   └── tools/
 │       │       ├── entities.py    ← get_entities() — ID 기반 상세 조회 (도메인 공통)
 │       │       ├── vector.py      ← semantic_search() — MILVUS_HOST 미설정 시 빈 목록 반환
-│       │       ├── graph_search.py ← semantic_graph_search() — 벡터→그래프 멀티홉
-│       │       └── graph.py       ← get_researcher_network(), get_citation_graph(), run_graph_query()
+│       │       ├── vector_graph.py ← semantic_graph_search() — 벡터→그래프 멀티홉
+│       │       ├── graph.py       ← get_researcher_network(), get_citation_graph(), run_graph_query()
+│       │       └── filter.py      ← filter_entities() — 연도·기관·상태 필터 (repository 경유)
 │       └── infrastructure/
-│           ├── component_factory.py  ← RepositoryFactory 싱글톤 + Milvus/Neo4j lazy-init
+│           ├── component_factory.py  ← RepositoryFactory 싱글톤 + Milvus/Neo4j lazy-init (False sentinel)
+│           ├── graph_compiler.py     ← _NEO4J_RELATIONS, SCHEMA_HINT, compile_hop()
 │           ├── database.py           ← ensure_schema, seed_from_fixtures
 │           ├── milvus.py             ← make_vector_search_fn(), ensure_collection()
 │           ├── neo4j.py              ← make_graph_query_fn(), make_fetch_*_fn()
@@ -200,8 +202,7 @@ class RDAgentState(TypedDict):
 CONFIG_DEFAULTS = {
     "temperature":    0.0,
     "semantic_top_k": 20,
-    "dense_weight":   0.3,
-    "sparse_weight":  0.7,
+    "keyword_weight": 0.5,   # BM25(sparse) 가중치. dense = 1.0 - keyword_weight
 }
 # 모델명·max_iterations는 DB → config.py(env) 순으로 fallback
 
@@ -216,7 +217,7 @@ class RequestConfig:
 MariaDB `system_config` 테이블 (key VARCHAR, value JSON):
 - `MARIADB_URL` 설정 시 자동 생성·사용
 - 미설정 시 `MemoryConfigRepository` (프로세스 메모리) fallback
-- 저장 키: `orchestrator_model`, `worker_model`, `generate_model`, `compact_model`, `max_iterations`, `temperature`, `semantic_top_k`, `dense_weight`, `sparse_weight`
+- 저장 키: `orchestrator_model`, `worker_model`, `generate_model`, `compact_model`, `max_iterations`, `temperature`, `semantic_top_k`, `keyword_weight`
 - `/settings` 페이지 또는 `PATCH /api/v1/admin/config`로 재기동 없이 변경 가능
 
 ---
@@ -233,12 +234,14 @@ class OrchestratorPlan(BaseModel):
 async def orchestrator(state, config) -> dict:
     # _build_capabilities(tools_by_name) — 동적 capabilities 주입
     # with_structured_output(OrchestratorPlan)
+    # _merge_dependent_tasks(tasks) — 의존 키워드("검색된", "위의" 등) 감지 시 단일 태스크로 병합
     # 실패 시: tasks=[], meaningful error reasoning 반환
     return {"messages": [AIMessage(name="orchestrator")], "pending_tasks": tasks, "iteration_count": n}
 ```
 
 - 도구 이름·파라미터를 직접 지정하지 않음 — 워커가 자율 결정
 - 대화 히스토리의 `[tool_results]` 메시지를 보고 수집 완료 여부 판단
+- `_merge_dependent_tasks`: 태스크 설명에 이전 결과 참조 키워드가 있으면 병렬 실행 불가 → 앞 태스크에 병합
 
 ### parallel_executor (Worker Agent)
 
@@ -288,12 +291,13 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 
 | 도구 | 파일 | 주요 파라미터 |
 |------|------|------|
-| semantic_search | tools/vector.py | query, node_type, top_k, dense_weight, sparse_weight — 하이브리드 벡터 검색 (Milvus 필요) |
-| semantic_graph_search | tools/graph_search.py | query, entry_type, hops, top_k — **벡터→그래프 멀티홉** (Milvus+Neo4j 필요) |
-| get_entities | tools/entities.py | entity_type, ids — ID 기반 엔티티 상세 조회 (Researcher\|Paper\|Patent\|Technology\|Project) |
-| get_researcher_network | tools/graph.py | researcher_name — Neo4j 연구자 협업·논문·특허 네트워크 (NEO4J_URI 필요) |
-| get_citation_graph | tools/graph.py | paper_title, depth — Neo4j 논문 인용 그래프 |
-| run_graph_query | tools/graph.py | cypher — Neo4j READ 전용 Cypher (WRITE 차단) |
+| semantic_search | tools/vector.py | query, node_type, top_k, keyword_weight, year_from, year_to — 하이브리드 벡터 검색 (Milvus 필요) |
+| semantic_graph_search | tools/vector_graph.py | query, entry_type, hops, top_k — **벡터→그래프 멀티홉** (Milvus+Neo4j 필요) |
+| get_entities | tools/entities.py | entity_type, ids — ID 기반 엔티티 상세 조회 → `list[dict]` 반환 |
+| filter_entities | tools/filter.py | entity_type, year_from, year_to, affiliation 등 — 연도·기관·상태 필터 (repository 경유) |
+| get_researcher_network | tools/graph.py | researcher_name, researcher_id — Neo4j 연구자 논문·특허·기술·기관 네트워크 |
+| get_citation_graph | tools/graph.py | paper_title, paper_id, depth — Neo4j 논문 인용 그래프 |
+| run_graph_query | tools/graph.py | cypher — Neo4j READ 전용 Cypher (WRITE 차단, 알 수 없는 관계 타입 차단) |
 
 > 도메인별 키워드 검색(search_papers 등)은 제거됨. 워커는 `semantic_search`로 ID를 수집하고 `get_entities`로 상세 조회하는 패턴을 사용합니다.
 
@@ -309,9 +313,10 @@ async def get_llm_and_tools(session: ClientSession) -> dict:
 # 인덱스: dense → HNSW COSINE, sparse → BM25
 ```
 
-- `MILVUS_HOST` 미설정 시 `semantic_search` 도구는 None 반환 (graceful degradation)
+- `MILVUS_HOST` 미설정 시 `semantic_search` 도구는 빈 목록 반환 (graceful degradation)
 - 임베딩 모델: `snunlp/KR-SBERT-V40K-klueNLI-augSTS` (768-dim)
-- 기본 가중치: dense 0.3 + sparse 0.7 (QueryConfig으로 per-request 오버라이드 가능)
+- `keyword_weight`: BM25(sparse) 가중치 (기본 0.5), dense = `1.0 - keyword_weight`
+- `year_from` / `year_to`: Milvus 필드 레벨 필터 (Milvus 컬렉션에 `year` 필드 필요)
 
 ---
 
