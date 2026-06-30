@@ -11,455 +11,457 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #0f1117;
       color: #e2e8f0;
-      min-height: 100vh;
+      height: 100dvh;
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .layout {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem;
-    }
-
-    .card {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 16px;
-      padding: 2.5rem;
       width: 100%;
-      max-width: 720px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      margin-top: 3rem;
+      max-width: 900px;
+      height: 100%;
+      padding: 0 1.5rem;
     }
 
+    /* ── Header ──────────────────────────────────────────────────── */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 1.75rem;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid #1e2235;
+      flex-shrink: 0;
     }
-    .header-left { display: flex; flex-direction: column; gap: 0.3rem; }
-
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
     .badge {
-      display: inline-block;
       background: #7c3aed;
       color: #fff;
-      font-size: 0.68rem;
+      font-size: 0.62rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      padding: 0.2rem 0.65rem;
+      padding: 0.18rem 0.55rem;
       border-radius: 999px;
-      width: fit-content;
     }
-
-    h1 { font-size: 1.6rem; font-weight: 700; color: #f0f4ff; }
-
-    .session-bar { display: flex; align-items: center; gap: 0.5rem; }
-    .session-label { color: #4a5568; font-size: 0.75rem; }
-    .session-id {
-      color: #7c3aed;
-      font-size: 0.75rem;
-      font-family: monospace;
-      background: #12142080;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-    }
-    .btn-reset {
+    .brand-title { font-size: 0.95rem; font-weight: 600; color: #f0f4ff; }
+    .header-actions { display: flex; align-items: center; gap: 0.6rem; }
+    .session-info { color: #2d3148; font-size: 0.7rem; }
+    .session-id { color: #7c3aed; font-family: monospace; }
+    .btn-ghost {
       background: transparent;
-      border: 1px solid #2d3148;
+      border: 1px solid #1e2235;
       border-radius: 6px;
-      color: #8892a4;
+      color: #4a5568;
       cursor: pointer;
-      font-size: 0.75rem;
-      padding: 0.2rem 0.6rem;
+      font-size: 0.7rem;
+      padding: 0.18rem 0.5rem;
+      text-decoration: none;
       transition: border-color 0.2s, color 0.2s;
     }
-    .btn-reset:hover { border-color: #f56565; color: #fc8181; }
+    .btn-ghost:hover { border-color: #7c3aed55; color: #a5b4fc; }
 
+    /* ── Chat ────────────────────────────────────────────────────── */
     .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 0;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-      max-height: 480px;
-      overflow-y: auto;
-      padding-right: 4px;
+      gap: 1.75rem;
     }
-    .chat:empty { display: none; }
+    .chat:empty::after {
+      content: "자유롭게 R&D 관련 질문을 입력하세요.";
+      color: #2d3148;
+      font-size: 0.85rem;
+      text-align: center;
+      margin: auto;
+    }
+    .chat::-webkit-scrollbar { width: 3px; }
+    .chat::-webkit-scrollbar-thumb { background: #1e2235; border-radius: 2px; }
 
-    .msg { display: flex; flex-direction: column; gap: 0.25rem; }
+    .msg { display: flex; flex-direction: column; gap: 0.35rem; }
     .msg-role {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
     }
     .msg.user .msg-role      { color: #7c3aed; }
     .msg.assistant .msg-role { color: #38bdf8; }
 
     .msg-body {
-      background: #0f1117;
-      border: 1px solid #2d3148;
-      border-radius: 8px;
-      color: #c7d2fe;
-      font-size: 0.88rem;
-      line-height: 1.7;
-      padding: 0.75rem 1rem;
-      white-space: pre-wrap;
+      background: #131621;
+      border: 1px solid #1e2235;
+      border-radius: 10px;
+      color: #cbd5e1;
+      font-size: 0.875rem;
+      line-height: 1.85;
+      padding: 0.85rem 1.1rem;
       word-break: break-word;
     }
-    .msg.user .msg-body { color: #e2e8f0; border-color: #3d3f6a; }
+    .msg.user .msg-body {
+      background: #1a1d2e;
+      border-color: #2d3158;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
 
-    .msg-body.streaming::after {
-      content: "▋";
-      animation: blink 0.7s steps(1) infinite;
+    /* ── Markdown ────────────────────────────────────────────────── */
+    .msg-body h3 { color: #f0f4ff; font-size: 1rem;    font-weight: 600; margin: 1rem 0 0.3rem; }
+    .msg-body h4 { color: #e2e8f0; font-size: 0.92rem; font-weight: 600; margin: 0.8rem 0 0.3rem; }
+    .msg-body h5 { color: #a5b4fc; font-size: 0.85rem; font-weight: 600; margin: 0.7rem 0 0.25rem; }
+    .msg-body p  { margin: 0.3rem 0; }
+    .msg-body strong { color: #e2e8f0; font-weight: 600; }
+    .msg-body em     { color: #a5b4fc; font-style: italic; }
+    .msg-body ul, .msg-body ol { padding-left: 1.3rem; margin: 0.3rem 0; }
+    .msg-body li { margin: 0.18rem 0; }
+    .msg-body code {
+      background: #0a0c14;
+      border: 1px solid #2d3148;
+      border-radius: 4px;
+      color: #a5b4fc;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.8em;
+      padding: 0.1em 0.35em;
+    }
+    .msg-body pre {
+      background: #0a0c14;
+      border: 1px solid #1e2235;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.6rem 0;
+      padding: 0.75rem 1rem;
+    }
+    .msg-body pre code {
+      background: none;
+      border: none;
+      color: #c7d2fe;
+      font-size: 0.82rem;
+      padding: 0;
+    }
+    .msg-body hr { border: none; border-top: 1px solid #1e2235; margin: 0.6rem 0; }
+    .msg-body .md-br { display: block; height: 0.4em; }
+
+    .cursor {
       color: #7c3aed;
+      animation: blink 0.7s steps(1) infinite;
     }
     @keyframes blink { 50% { opacity: 0; } }
 
-    .rounds-box { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.3rem; }
-
-    .round-item {
-      background: #0d1117;
-      border: 1px solid #2d3148;
-      border-left: 3px solid #7c3aed;
-      border-radius: 6px;
-      padding: 0.55rem 0.9rem;
-      font-size: 0.76rem;
+    /* ── Thinking blocks ─────────────────────────────────────────── */
+    .thinking-block {
+      border: 1px solid #1e2235;
+      border-left: 2px solid #7c3aed33;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 0.35rem;
+      transition: border-left-color 0.3s;
     }
-    .round-header {
+    .thinking-block[open] { border-left-color: #7c3aed88; }
+
+    .thinking-block > summary {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      margin-bottom: 0.3rem;
+      padding: 0.45rem 0.8rem;
+      background: #0d0f1a;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.73rem;
+      color: #4a5568;
+      list-style: none;
+      transition: color 0.2s;
     }
-    .round-badge {
-      background: #7c3aed22;
-      border: 1px solid #7c3aed55;
-      border-radius: 4px;
-      color: #a78bfa;
-      font-size: 0.68rem;
+    .thinking-block > summary:hover { color: #a5b4fc; }
+    .thinking-block > summary::marker,
+    .thinking-block > summary::-webkit-details-marker { display: none; }
+
+    .thinking-chevron {
+      font-size: 0.55rem;
+      transition: transform 0.2s;
+      color: #7c3aed66;
+    }
+    .thinking-block[open] .thinking-chevron { transform: rotate(90deg); }
+
+    .thinking-round-badge {
+      background: #7c3aed18;
+      border: 1px solid #7c3aed33;
+      border-radius: 3px;
+      color: #7c3aed99;
+      font-size: 0.62rem;
       font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 0.1rem 0.45rem;
+      letter-spacing: 0.06em;
+      padding: 0.08rem 0.38rem;
       text-transform: uppercase;
     }
-    .round-reasoning {
-      color: #64748b;
+    .thinking-label { font-weight: 500; }
+    .thinking-done-label { color: #6ee7b788; font-size: 0.68rem; margin-left: auto; }
+
+    .thinking-content {
+      background: #0a0c14;
+      padding: 0.65rem 0.9rem;
+      border-top: 1px solid #1e2235;
+    }
+    .thinking-reasoning {
+      color: #3d4a5c;
       font-size: 0.74rem;
-      line-height: 1.5;
-      margin-bottom: 0.35rem;
+      line-height: 1.6;
+      margin-bottom: 0.5rem;
+      font-style: italic;
     }
-    .round-tasks {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-    .round-tasks-header {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-    .parallel-label {
-      color: #f59e0b;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-    .task-entry {
+    .thinking-tasks { display: flex; flex-direction: column; gap: 0.4rem; }
+    .thinking-task {
+      border-left: 2px solid #1e2235;
+      padding-left: 0.65rem;
       display: flex;
       flex-direction: column;
       gap: 0.2rem;
-      padding-left: 0.5rem;
-      border-left: 2px solid #2d2f50;
     }
-    .chip {
-      background: #1e2035;
-      border: 1px solid #3d3f6a;
-      border-radius: 999px;
-      color: #a5b4fc;
-      font-size: 0.72rem;
-      padding: 0.15rem 0.6rem;
-      display: inline-block;
+    .task-desc {
+      color: #64748b;
+      font-size: 0.73rem;
+      line-height: 1.45;
     }
-    .chip.done {
-      border-color: #065f46;
+    .task-tools { display: flex; flex-wrap: wrap; gap: 0.25rem; min-height: 0.3rem; }
+    .tool-pill {
+      background: #0a1a10;
+      border: 1px solid #1a4030;
+      border-radius: 3px;
       color: #6ee7b7;
-      background: #064e3b22;
-    }
-    .task-tools {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.25rem;
-      min-height: 0.5rem;
-    }
-    .result-pill {
-      background: #0f291e;
-      border: 1px solid #065f46;
-      border-radius: 4px;
-      color: #6ee7b7;
-      font-size: 0.68rem;
-      padding: 0.1rem 0.45rem;
+      font-size: 0.65rem;
+      padding: 0.08rem 0.42rem;
+      font-family: monospace;
     }
 
-    .example-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.75rem;
-    }
-    .example-chip {
-      background: #1e2035;
-      border: 1px solid #3d3f6a;
-      border-radius: 999px;
-      color: #a5b4fc;
-      font-size: 0.75rem;
-      padding: 0.3rem 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .example-chip:hover {
-      background: #3d3f6a;
-      color: #fff;
-    }
-
-    .settings-panel {
-      background: #121420;
-      border: 1px solid #2d3148;
+    /* ── References ──────────────────────────────────────────────── */
+    .ref-block {
+      margin-top: 0.4rem;
+      padding: 0.55rem 0.9rem;
+      background: #0a0c14;
+      border: 1px solid #1e2235;
       border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      display: none;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
     }
-    .setting-group { display: flex; flex-direction: column; gap: 0.4rem; }
-    .setting-group label { font-size: 0.75rem; color: #8892a4; font-weight: 600; }
-    .setting-group input,
-    .setting-group select {
-      background: #0f1117;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
-      color: #fff;
-      padding: 0.4rem 0.6rem;
-      font-size: 0.85rem;
-      outline: none;
+    .ref-label {
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: #2d3148;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.38rem;
     }
-    .setting-group input:focus,
-    .setting-group select:focus { border-color: #7c3aed; }
-    .setting-group select option { background: #1a1d27; }
+    .ref-items { display: flex; flex-wrap: wrap; gap: 0.28rem; }
+    .ref-item {
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-family: monospace;
+      padding: 0.12rem 0.48rem;
+      border: 1px solid;
+    }
+    .ref-item.Paper        { color: #60a5fa; border-color: #1e3a5f40; background: #0c1e3618; }
+    .ref-item.Patent       { color: #fb923c; border-color: #5f3a1e40; background: #360c0c18; }
+    .ref-item.Researcher   { color: #4ade80; border-color: #1e5f3a40; background: #0c362018; }
+    .ref-item.Technology   { color: #a78bfa; border-color: #3a1e5f40; background: #1c0c3618; }
+    .ref-item.Project      { color: #facc15; border-color: #5f5a1e40; background: #36340c18; }
+    .ref-item.Organization { color: #94a3b8; border-color: #2d314840; background: #12142018; }
+
+    /* ── Input area ──────────────────────────────────────────────── */
+    .input-area {
+      border-top: 1px solid #1e2235;
+      padding: 0.9rem 0 1.1rem;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
     .btn-toggle-settings {
       background: transparent;
       border: none;
-      color: #7c3aed;
-      font-size: 0.75rem;
+      color: #2d3148;
+      font-size: 0.7rem;
       cursor: pointer;
-      margin-bottom: 0.5rem;
-      align-self: flex-end;
+      align-self: flex-start;
       display: flex;
       align-items: center;
-      gap: 0.3rem;
+      gap: 0.25rem;
+      transition: color 0.2s;
+      padding: 0;
     }
+    .btn-toggle-settings:hover { color: #7c3aed; }
 
-    .search-box { display: flex; gap: 0.5rem; }
-    .search-box input {
-      flex: 1;
+    .settings-panel {
+      background: #0a0c14;
+      border: 1px solid #1e2235;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: none;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+    }
+    .setting-group { display: flex; flex-direction: column; gap: 0.28rem; }
+    .setting-group label { font-size: 0.67rem; color: #4a5568; font-weight: 600; }
+    .setting-group input {
       background: #0f1117;
       border: 1px solid #2d3148;
-      border-radius: 8px;
+      border-radius: 5px;
       color: #e2e8f0;
+      padding: 0.3rem 0.45rem;
+      font-size: 0.8rem;
+      outline: none;
+      width: 100%;
+    }
+    .setting-group input:focus { border-color: #7c3aed; }
+
+    .search-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .search-row textarea {
+      flex: 1;
+      background: #131621;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-family: inherit;
       font-size: 0.9rem;
       padding: 0.65rem 1rem;
       outline: none;
+      resize: none;
+      height: 44px;
+      max-height: 120px;
+      overflow-y: auto;
       transition: border-color 0.2s;
+      line-height: 1.5;
     }
-    .search-box input:focus { border-color: #7c3aed; }
-    .search-box input::placeholder { color: #4a5568; }
-    .search-box input:disabled { opacity: 0.5; }
+    .search-row textarea:focus { border-color: #7c3aed55; }
+    .search-row textarea::placeholder { color: #2d3148; }
+    .search-row textarea:disabled { opacity: 0.45; }
 
     .btn-search {
       background: #7c3aed;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       color: #fff;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 600;
-      padding: 0.65rem 1.25rem;
+      padding: 0.65rem 1.2rem;
       transition: background 0.2s;
       white-space: nowrap;
+      height: 44px;
     }
     .btn-search:hover:not(:disabled) { background: #6d28d9; }
-    .btn-search:disabled { background: #3d3f5a; cursor: not-allowed; }
+    .btn-search:disabled { background: #1e2235; color: #4a5568; cursor: not-allowed; }
 
-    .links {
+    .example-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .example-chip {
+      background: transparent;
+      border: 1px solid #1e2235;
+      border-radius: 999px;
+      color: #4a5568;
+      font-size: 0.7rem;
+      padding: 0.22rem 0.65rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .example-chip:hover { border-color: #7c3aed44; color: #a5b4fc; }
+
+    /* ── Footer strip ────────────────────────────────────────────── */
+    .footer-strip {
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.6rem;
-      margin-top: 1.5rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid #2d3148;
+      align-items: center;
+      gap: 0.75rem;
+      padding-top: 0.1rem;
     }
-    .links a {
-      background: #0f1117;
-      border: 1px solid #2d3148;
-      border-radius: 8px;
-      color: #8892a4;
-      font-size: 0.78rem;
-      padding: 0.4rem 0.9rem;
+    .footer-strip a {
+      color: #1e2235;
+      font-size: 0.68rem;
       text-decoration: none;
-      transition: border-color 0.2s, color 0.2s;
+      transition: color 0.2s;
     }
-    .links a:hover { border-color: #7c3aed; color: #c7d2fe; }
-
+    .footer-strip a:hover { color: #7c3aed; }
     .status-dot {
       display: inline-block;
-      width: 7px; height: 7px;
+      width: 5px; height: 5px;
       border-radius: 50%;
-      background: #4a5568;
-      margin-right: 5px;
+      background: #2d3148;
       vertical-align: middle;
+      margin-right: 3px;
       transition: background 0.3s;
     }
-    .status-dot.ok  { background: #48bb78; }
-    .status-dot.err { background: #f56565; }
+    .status-dot.ok  { background: #4ade80; }
+    .status-dot.err { background: #f87171; }
 
-    .chat::-webkit-scrollbar { width: 4px; }
-    .chat::-webkit-scrollbar-track { background: transparent; }
-    .chat::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 2px; }
-
-    .ref-block {
-      margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid #2d3148;
-      display: flex;
-      flex-direction: column;
-      gap: 0.3rem;
-    }
-    .ref-label {
-      font-size: 0.68rem;
-      font-weight: 700;
-      color: #4a5568;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .ref-items {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.3rem;
-    }
-    .ref-item {
-      background: #12142080;
-      border: 1px solid #2d3148;
-      border-radius: 4px;
-      color: #6b7280;
-      font-size: 0.72rem;
-      font-family: monospace;
-      padding: 0.1rem 0.45rem;
-    }
-
+    /* ── Data catalog ────────────────────────────────────────────── */
     .data-catalog {
-      margin-top: 0.75rem;
-      border: 1px solid #2d3148;
-      border-radius: 8px;
+      border: 1px solid #1e2235;
+      border-radius: 7px;
       overflow: hidden;
     }
     .data-catalog summary {
-      color: #4a5568;
+      color: #2d3148;
       cursor: pointer;
-      font-size: 0.74rem;
+      font-size: 0.68rem;
       user-select: none;
       list-style: none;
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.5rem 0.85rem;
-      background: #121420;
+      padding: 0.38rem 0.7rem;
+      background: #0a0c14;
+      transition: color 0.2s;
     }
     .data-catalog summary:hover { color: #7c3aed; }
-    .data-catalog summary::before { content: "▸"; font-size: 0.65rem; }
+    .data-catalog summary::before { content: "▸"; font-size: 0.58rem; }
     .data-catalog[open] summary::before { content: "▾"; }
     .catalog-count {
-      background: #1e2035;
-      border: 1px solid #3d3f6a;
-      border-radius: 4px;
-      color: #6b7fad;
-      font-size: 0.68rem;
-      padding: 0.1rem 0.4rem;
+      background: #0f1117;
+      border: 1px solid #1e2235;
+      border-radius: 3px;
+      color: #2d3148;
+      font-size: 0.62rem;
+      padding: 0.03rem 0.32rem;
     }
     .catalog-body {
       background: #0a0c14;
-      padding: 0.75rem 0.9rem;
+      padding: 0.6rem 0.85rem;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 0.75rem;
+      gap: 0.6rem;
+      border-top: 1px solid #1e2235;
     }
-    .catalog-col { display: flex; flex-direction: column; gap: 0.35rem; }
-    .catalog-heading {
-      color: #4a5568;
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .catalog-tags { display: flex; flex-direction: column; gap: 0.2rem; }
-    .ctag {
-      color: #64748b;
-      font-size: 0.7rem;
-      line-height: 1.4;
-    }
-    .ctag::before { content: "· "; color: #2d3148; }
-
-    .process-log {
-      margin-top: 0.35rem;
-    }
-    .process-log summary {
-      color: #4a5568;
-      cursor: pointer;
-      font-size: 0.72rem;
-      user-select: none;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-    .process-log summary:hover { color: #7c3aed; }
-    .process-log summary::before { content: "▸"; font-size: 0.65rem; }
-    .process-log[open] summary::before { content: "▾"; }
-    .process-content {
-      margin-top: 0.4rem;
-      background: #0a0c14;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
-      padding: 0.6rem 0.9rem;
-      font-size: 0.73rem;
-      color: #4a5568;
-      font-family: monospace;
-      line-height: 1.7;
-      white-space: pre-wrap;
-    }
+    .catalog-col { display: flex; flex-direction: column; gap: 0.28rem; }
+    .catalog-heading { color: #2d3148; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+    .catalog-tags { display: flex; flex-direction: column; gap: 0.12rem; }
+    .ctag { color: #2d3148; font-size: 0.65rem; line-height: 1.4; }
+    .ctag::before { content: "· "; }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="layout">
+
     <!-- Header -->
-    <div class="header">
-      <div class="header-left">
-        <div class="badge">R&amp;D Nexus</div>
-        <h1>R&amp;D AI 어시스턴트</h1>
+    <header class="header">
+      <div class="brand">
+        <span class="badge">R&amp;D Nexus</span>
+        <span class="brand-title">R&amp;D AI 어시스턴트</span>
       </div>
-      <div class="session-bar">
-        <span class="session-label">세션</span>
-        <span class="session-id" id="session-display"></span>
-        <button class="btn-reset" onclick="resetSession()" title="세션 초기화">&#x21BA; 초기화</button>
-        <a href="/settings" class="btn-reset" title="설정" style="text-decoration:none;">&#x2699; 설정</a>
+      <div class="header-actions">
+        <span class="session-info">세션 <span class="session-id" id="session-display"></span></span>
+        <button class="btn-ghost" onclick="resetSession()">&#x21BA; 초기화</button>
+        <a class="btn-ghost" href="/settings">&#x2699; 설정</a>
+        <span class="status-dot" id="dot"></span>
       </div>
-    </div>
+    </header>
 
-    <!-- Chat history -->
-    <div class="chat" id="chat"></div>
+    <!-- Chat -->
+    <main class="chat" id="chat"></main>
 
-    <!-- Advanced Settings -->
-    <div style="display: flex; flex-direction: column;">
+    <!-- Input area -->
+    <div class="input-area">
+
       <button class="btn-toggle-settings" onclick="toggleSettings()">
-        <span id="settings-icon">&#x2699;</span> 고급 설정
+        &#x2699; 고급 설정
       </button>
       <div class="settings-panel" id="settings-panel">
         <div class="setting-group">
@@ -475,164 +477,211 @@
           <input type="number" id="conf-topk" value="20" min="5" max="100" step="5">
         </div>
         <div class="setting-group">
-          <label>Dense Weight (COSINE)</label>
+          <label>Dense Weight</label>
           <input type="number" id="conf-dense" value="0.3" min="0" max="1" step="0.1">
         </div>
         <div class="setting-group">
-          <label>Sparse Weight (BM25)</label>
+          <label>Sparse Weight</label>
           <input type="number" id="conf-sparse" value="0.7" min="0" max="1" step="0.1">
         </div>
       </div>
-    </div>
 
-    <!-- Search input -->
-    <div class="search-box">
-      <input id="query" type="text"
-             placeholder="자유롭게 질문을 입력하거나, 아래 예시 질문을 클릭해 보세요." />
-      <button class="btn-search" id="btn" onclick="search()">질의</button>
-    </div>
+      <div class="search-row">
+        <textarea id="query" placeholder="자유롭게 R&D 관련 질문을 입력하세요. (Enter 전송 / Shift+Enter 줄바꿈)"></textarea>
+        <button class="btn-search" id="btn" onclick="search()">질의</button>
+      </div>
 
-    <!-- Example Questions -->
-    <div class="example-chips">
-      <button class="example-chip" onclick="setQuery(this.innerText)">온디바이스 LLM 최적화 관련 최신 트렌드와 핵심 논문들을 요약해 줘</button>
-      <button class="example-chip" onclick="setQuery(this.innerText)">PIM 기술을 연구하는 주요 기관과 관련 R&D 과제 현황을 비교해 줘</button>
-      <button class="example-chip" onclick="setQuery(this.innerText)">뉴로모픽 컴퓨팅 기술을 활용하는 R&D 과제와 참여 연구자를 탐색해 줘</button>
-      <button class="example-chip" onclick="setQuery(this.innerText)">PIM 핵심 연구자의 협업 네트워크와 논문 인용 구조를 탐색해 줘</button>
-    </div>
+      <div class="example-chips">
+        <button class="example-chip" onclick="setQuery(this.innerText)">온디바이스 LLM 최적화 관련 최신 트렌드와 핵심 논문들을 요약해 줘</button>
+        <button class="example-chip" onclick="setQuery(this.innerText)">PIM 기술을 연구하는 주요 기관과 관련 R&D 과제 현황을 비교해 줘</button>
+        <button class="example-chip" onclick="setQuery(this.innerText)">뉴로모픽 컴퓨팅 기술을 활용하는 R&D 과제와 참여 연구자를 탐색해 줘</button>
+        <button class="example-chip" onclick="setQuery(this.innerText)">PIM 핵심 연구자의 협업 네트워크와 논문 인용 구조를 탐색해 줘</button>
+      </div>
 
-    <!-- Data catalog -->
-    <details class="data-catalog">
-      <summary>
-        데이터 현황
-        <span class="catalog-count" id="cnt-papers">논문 …</span>
-        <span class="catalog-count" id="cnt-patents">특허 …</span>
-        <span class="catalog-count" id="cnt-researchers">연구자 …</span>
-        <span class="catalog-count" id="cnt-technologies">기술 …</span>
-        <span class="catalog-count" id="cnt-projects">과제 …</span>
-        <span class="catalog-count" id="cnt-organizations">기관 …</span>
-      </summary>
-      <div class="catalog-body" id="catalog-body">
-        <div class="catalog-col" style="opacity:0.4;">
-          <span class="catalog-heading">불러오는 중…</span>
-        </div>
-        <div class="catalog-col" id="catalog-graph-col">
-          <span class="catalog-heading">그래프 관계</span>
-          <div class="catalog-tags">
-            <span class="ctag">Researcher → [AUTHORED] → Paper</span>
-            <span class="ctag">Researcher → [INVENTED] → Patent</span>
-            <span class="ctag">Researcher → [RESEARCHES] → Technology</span>
-            <span class="ctag">Researcher → [WORKS_AT] → Organization</span>
-            <span class="ctag">Paper → [CITES] → Paper</span>
-            <span class="ctag">Project → [EMPLOYS] → Researcher</span>
-            <span class="ctag">Project → [USES] → Technology</span>
+      <details class="data-catalog">
+        <summary>
+          데이터 현황
+          <span class="catalog-count" id="cnt-papers">논문 …</span>
+          <span class="catalog-count" id="cnt-patents">특허 …</span>
+          <span class="catalog-count" id="cnt-researchers">연구자 …</span>
+          <span class="catalog-count" id="cnt-technologies">기술 …</span>
+          <span class="catalog-count" id="cnt-projects">과제 …</span>
+          <span class="catalog-count" id="cnt-organizations">기관 …</span>
+        </summary>
+        <div class="catalog-body" id="catalog-body">
+          <div class="catalog-col" style="opacity:0.3;">
+            <span class="catalog-heading">불러오는 중…</span>
+          </div>
+          <div class="catalog-col" id="catalog-graph-col">
+            <span class="catalog-heading">그래프 관계</span>
+            <div class="catalog-tags">
+              <span class="ctag">Researcher → AUTHORED → Paper</span>
+              <span class="ctag">Researcher → INVENTED → Patent</span>
+              <span class="ctag">Researcher → RESEARCHES → Technology</span>
+              <span class="ctag">Researcher → WORKS_AT → Organization</span>
+              <span class="ctag">Paper → CITES → Paper</span>
+              <span class="ctag">Project → EMPLOYS → Researcher</span>
+              <span class="ctag">Project → USES → Technology</span>
+            </div>
           </div>
         </div>
-      </div>
-    </details>
+      </details>
 
-    <!-- Footer links -->
-    <div class="links">
-      <a href="/docs">&#x1F4C4; API Docs</a>
-      <a href="/redoc">&#x1F4D8; ReDoc</a>
-      <a href="/api/v1/health"><span class="status-dot" id="dot"></span>Health</a>
-    </div>
-  </div>
+      <div class="footer-strip">
+        <a href="/docs">API Docs</a>
+        <a href="/redoc">ReDoc</a>
+        <a href="/api/v1/health"><span class="status-dot" id="dot2"></span>Health</a>
+      </div>
+
+    </div><!-- /input-area -->
+  </div><!-- /layout -->
 
   <script>
-    // ── Session management ────────────────────────────────────────────────────
+    // ── Session ───────────────────────────────────────────────────────
     var sessionId = newSessionId();
-
-    function newSessionId() {
-      return "web-" + Math.random().toString(36).slice(2, 10);
-    }
-
-    function renderSessionId() {
-      document.getElementById("session-display").textContent = sessionId;
-    }
-
+    function newSessionId() { return "web-" + Math.random().toString(36).slice(2, 10); }
+    function renderSessionId() { document.getElementById("session-display").textContent = sessionId; }
     function resetSession() {
       if (!confirm("세션을 초기화하면 대화 기록이 모두 삭제됩니다. 계속할까요?")) return;
       sessionId = newSessionId();
       renderSessionId();
       document.getElementById("chat").innerHTML = "";
     }
-
     renderSessionId();
 
     function toggleSettings() {
-      var panel = document.getElementById("settings-panel");
-      var icon  = document.getElementById("settings-icon");
-      if (panel.style.display === "grid") {
-        panel.style.display  = "none";
-        icon.style.transform = "rotate(0deg)";
-      } else {
-        panel.style.display  = "grid";
-        icon.style.transform = "rotate(90deg)";
-      }
+      var p = document.getElementById("settings-panel");
+      p.style.display = p.style.display === "grid" ? "none" : "grid";
     }
 
-    // ── Health check ─────────────────────────────────────────────────────────
+    // ── Health ────────────────────────────────────────────────────────
     fetch("/api/v1/health")
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        document.getElementById("dot").className =
-          "status-dot " + (d.status === "ok" ? "ok" : "err");
+        var cls = "status-dot " + (d.status === "ok" ? "ok" : "err");
+        document.getElementById("dot").className  = cls;
+        document.getElementById("dot2").className = cls;
       })
       .catch(function() {
-        document.getElementById("dot").className = "status-dot err";
+        document.getElementById("dot").className  = "status-dot err";
+        document.getElementById("dot2").className = "status-dot err";
       });
 
-    // ── Data catalog (동적 로딩) ──────────────────────────────────────────────
-    var _CATALOG_LABELS = {
-      papers:        "논문",
-      patents:       "특허",
-      researchers:   "연구자",
-      technologies:  "기술",
-      projects:      "과제",
-      organizations: "기관",
-    };
-
+    // ── Data catalog ──────────────────────────────────────────────────
+    var _LABELS = { papers:"논문", patents:"특허", researchers:"연구자", technologies:"기술", projects:"과제", organizations:"기관" };
     fetch("/api/v1/stats")
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        // summary 카운트 업데이트
-        Object.keys(_CATALOG_LABELS).forEach(function(key) {
+        Object.keys(_LABELS).forEach(function(key) {
           var el = document.getElementById("cnt-" + key);
-          if (el && data[key]) el.textContent = _CATALOG_LABELS[key] + " " + data[key].count;
+          if (el && data[key]) el.textContent = _LABELS[key] + " " + data[key].count;
         });
-
-        // catalog-body 재구성 (그래프 관계 col 보존)
         var body = document.getElementById("catalog-body");
         var graphCol = document.getElementById("catalog-graph-col");
         body.innerHTML = "";
-
-        Object.keys(_CATALOG_LABELS).forEach(function(key) {
-          var d = data[key];
-          if (!d) return;
-          var col = document.createElement("div");
-          col.className = "catalog-col";
+        Object.keys(_LABELS).forEach(function(key) {
+          var d = data[key]; if (!d) return;
+          var col = document.createElement("div"); col.className = "catalog-col";
           var tags = (d.items || []).map(function(item) {
             var label = item.sub ? item.name + " (" + item.sub + ")" : item.name;
             return '<span class="ctag">' + escHtml(label) + '</span>';
           }).join("");
-          col.innerHTML =
-            '<span class="catalog-heading">' + _CATALOG_LABELS[key] + ' (' + d.count + ')</span>' +
+          col.innerHTML = '<span class="catalog-heading">' + _LABELS[key] + ' (' + d.count + ')</span>' +
             '<div class="catalog-tags">' + tags + '</div>';
           body.appendChild(col);
         });
-
         if (graphCol) body.appendChild(graphCol);
       })
       .catch(function() {
-        // 실패 시 요약 카운트만 정적 표기로 복원
-        var fallback = {papers:12, patents:10, researchers:10, technologies:7, projects:10, organizations:9};
-        Object.keys(fallback).forEach(function(key) {
-          var el = document.getElementById("cnt-" + key);
-          if (el) el.textContent = _CATALOG_LABELS[key] + " " + fallback[key];
+        var fb = {papers:12, patents:10, researchers:10, technologies:7, projects:10, organizations:9};
+        Object.keys(fb).forEach(function(k) {
+          var el = document.getElementById("cnt-" + k);
+          if (el) el.textContent = _LABELS[k] + " " + fb[k];
         });
       });
 
-    // ── Chat helpers ─────────────────────────────────────────────────────────
+    // ── Markdown renderer ─────────────────────────────────────────────
+    function escHtml(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function inlineRender(s) {
+      s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/\*([^*\n]+)\*/g,     "<em>$1</em>");
+      s = s.replace(/`([^`\n]+)`/g,       "<code>$1</code>");
+      return s;
+    }
+
+    function renderMarkdown(text) {
+      var lines = text.split("\n");
+      var html  = "";
+      var i = 0;
+      while (i < lines.length) {
+        var line = lines[i];
+
+        // fenced code block
+        if (line.startsWith("```")) {
+          var code = "";
+          i++;
+          while (i < lines.length && !lines[i].startsWith("```")) { code += lines[i] + "\n"; i++; }
+          i++;
+          html += "<pre><code>" + escHtml(code.trimEnd()) + "</code></pre>";
+          continue;
+        }
+
+        // heading
+        var hm = line.match(/^(#{1,4})\s+(.+)/);
+        if (hm) {
+          var lvl = Math.min(hm[1].length + 2, 6);
+          html += "<h" + lvl + ">" + inlineRender(escHtml(hm[2])) + "</h" + lvl + ">";
+          i++; continue;
+        }
+
+        // hr
+        if (/^[-*_]{3,}$/.test(line.trim())) {
+          html += "<hr>"; i++; continue;
+        }
+
+        // unordered list (collect block)
+        if (/^[-*]\s+/.test(line)) {
+          html += "<ul>";
+          while (i < lines.length) {
+            var m = lines[i].match(/^[-*]\s+(.+)/);
+            if (!m) break;
+            html += "<li>" + inlineRender(escHtml(m[1])) + "</li>"; i++;
+          }
+          html += "</ul>"; continue;
+        }
+
+        // ordered list (collect block)
+        if (/^\d+\.\s+/.test(line)) {
+          html += "<ol>";
+          while (i < lines.length) {
+            var om = lines[i].match(/^\d+\.\s+(.+)/);
+            if (!om) break;
+            html += "<li>" + inlineRender(escHtml(om[1])) + "</li>"; i++;
+          }
+          html += "</ol>"; continue;
+        }
+
+        // blank line
+        if (line.trim() === "") {
+          html += '<span class="md-br"></span>'; i++; continue;
+        }
+
+        // paragraph
+        html += "<p>" + inlineRender(escHtml(line)) + "</p>";
+        i++;
+      }
+      return html;
+    }
+
+    // ── Chat helpers ──────────────────────────────────────────────────
+    function scrollChat() {
+      var chat = document.getElementById("chat");
+      chat.scrollTop = chat.scrollHeight;
+    }
+
     function appendUserMessage(text) {
       var chat = document.getElementById("chat");
       var div  = document.createElement("div");
@@ -643,129 +692,137 @@
       scrollChat();
     }
 
+    var currentRound  = 0;
+    var taskToolsMap  = {};
+    var roundElMap    = {};
+    var isStreaming   = false;
+
     function createAssistantMessage() {
       var chat = document.getElementById("chat");
       var div  = document.createElement("div");
       div.className = "msg assistant";
       div.innerHTML =
         '<div class="msg-role">R&amp;D Nexus</div>' +
-        '<div class="rounds-box" id="rounds-box"></div>' +
-        '<div class="msg-body streaming" id="answer-body"></div>' +
-        '<div class="ref-block" id="ref-block" style="display:none;"></div>' +
-        '<details class="process-log" id="process-log" style="display:none;">' +
-          '<summary>처리 과정 상세</summary>' +
-          '<div class="process-content" id="process-content"></div>' +
-        '</details>';
+        '<div id="thinking-blocks"></div>' +
+        '<div class="msg-body" id="answer-body"></div>' +
+        '<div class="ref-block" id="ref-block" style="display:none;"></div>';
       chat.appendChild(div);
       scrollChat();
       return {
-        body:           div.querySelector("#answer-body"),
-        roundsBox:      div.querySelector("#rounds-box"),
+        thinkingBlocks: div.querySelector("#thinking-blocks"),
+        answerBody:     div.querySelector("#answer-body"),
         refBlock:       div.querySelector("#ref-block"),
-        processLog:     div.querySelector("#process-log"),
-        processContent: div.querySelector("#process-content"),
       };
     }
 
-    var currentRound = 0;
-    var taskToolsMap  = {};  // "round:task" → task-tools div
-    var roundElMap    = {};  // round → round div element (document.getElementById 중복 방지)
-
-    function addRound(roundsBox, round, reasoning, tasks) {
+    function addRound(thinkingBlocks, round, reasoning, tasks) {
       currentRound = round;
+
       var tasksHtml = "";
       if (tasks && tasks.length > 0) {
-        tasksHtml =
-          '<div class="round-tasks" id="round-tasks-' + round + '">' +
-            '<div class="round-tasks-header"><span class="parallel-label">⚡ 병렬 실행</span></div>' +
-            tasks.map(function(t, i) {
-              var chipLabel = t.substring(0, 35) + (t.length > 35 ? '…' : '');
-              return '<div class="task-entry" id="task-entry-' + round + '-' + i + '">' +
-                '<span class="chip" title="' + escHtml(t) + '">' + escHtml(chipLabel) + '</span>' +
-                '<div class="task-tools" id="task-tools-' + round + '-' + i + '"></div>' +
-                '</div>';
-            }).join("") +
-          '</div>';
+        tasksHtml = '<div class="thinking-tasks">' +
+          tasks.map(function(t, i) {
+            return '<div class="thinking-task" id="ttask-' + round + '-' + i + '">' +
+              '<div class="task-desc">' + escHtml(t) + '</div>' +
+              '<div class="task-tools" id="ttools-' + round + '-' + i + '"></div>' +
+              '</div>';
+          }).join("") + '</div>';
       }
-      var div = document.createElement("div");
-      div.className = "round-item";
-      div.id = "round-" + round;
-      div.innerHTML =
-        '<div class="round-header">' +
-          '<span class="round-badge">라운드 ' + round + '</span>' +
-          (tasks.length === 0 ? '<span style="color:#6ee7b7;font-size:0.7rem;">✓ 수집 완료</span>' : '') +
-        '</div>' +
-        '<div class="round-reasoning">' + escHtml(reasoning) + '</div>' +
-        tasksHtml;
-      roundsBox.appendChild(div);
-      // task → tools div 매핑 저장 (div.querySelectorAll 사용 — 복수 쿼리 시 ID 중복 방지)
-      roundElMap[round] = div;
-      var toolDivs = div.querySelectorAll('.task-tools');
+
+      var label = tasks.length === 0 ? "수집 완료" : "분석 중...";
+
+      var details = document.createElement("details");
+      details.className = "thinking-block";
+      details.setAttribute("open", "");
+      details.innerHTML =
+        '<summary>' +
+          '<span class="thinking-chevron">▶</span>' +
+          '<span class="thinking-round-badge">라운드 ' + round + '</span>' +
+          '<span class="thinking-label">' + label + '</span>' +
+        '</summary>' +
+        '<div class="thinking-content">' +
+          '<p class="thinking-reasoning">' + escHtml(reasoning) + '</p>' +
+          tasksHtml +
+        '</div>';
+
+      thinkingBlocks.appendChild(details);
+      roundElMap[round] = details;
+
+      // map task → tools div
       tasks.forEach(function(t, i) {
-        taskToolsMap[round + ':' + t] = toolDivs[i] || null;
+        var toolsDiv = details.querySelector("#ttools-" + round + "-" + i);
+        taskToolsMap[round + ":" + t] = toolsDiv || null;
       });
+
+      scrollChat();
     }
 
     function markRoundDone(round) {
-      var roundEl = roundElMap[round];
-      if (!roundEl) return;
-      roundEl.querySelectorAll(".chip").forEach(function(c) { c.className = "chip done"; });
+      var el = roundElMap[round];
+      if (!el) return;
+      el.removeAttribute("open");
+      var label = el.querySelector(".thinking-label");
+      if (!label) return;
+      var taskCount = el.querySelectorAll(".thinking-task").length;
+      if (taskCount > 0) {
+        label.textContent = "분석 완료";
+        var doneSpan = document.createElement("span");
+        doneSpan.className = "thinking-done-label";
+        doneSpan.textContent = taskCount + "개 태스크";
+        label.parentNode.appendChild(doneSpan);
+      }
     }
 
     function handleTaskResult(round, task, tools) {
-      var toolsDiv = taskToolsMap[round + ':' + task];
+      var toolsDiv = taskToolsMap[round + ":" + task];
       if (!toolsDiv) return;
       tools.forEach(function(tool) {
         var pill = document.createElement("span");
-        pill.className   = "result-pill";
+        pill.className = "tool-pill";
         pill.textContent = tool.name + ": " + tool.summary;
         toolsDiv.appendChild(pill);
       });
+      scrollChat();
     }
 
-    function scrollChat() {
-      var chat = document.getElementById("chat");
-      chat.scrollTop = chat.scrollHeight;
-    }
+    // ── Textarea auto-resize ──────────────────────────────────────────
+    var textarea = document.getElementById("query");
+    textarea.addEventListener("input", function() {
+      this.style.height = "44px";
+      this.style.height = Math.min(this.scrollHeight, 120) + "px";
+    });
+    textarea.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); search(); }
+    });
 
-    function escHtml(s) {
-      return s.replace(/&/g, "&amp;")
-               .replace(/</g, "&lt;")
-               .replace(/>/g, "&gt;");
-    }
-
-    // ── Search ────────────────────────────────────────────────────────────────
+    // ── Search ────────────────────────────────────────────────────────
     async function search() {
-      var input     = document.getElementById("query");
-      var queryText = input.value.trim();
-      if (!queryText) return;
+      var queryText = textarea.value.trim();
+      if (!queryText || isStreaming) return;
 
-      taskToolsMap = {};  // 쿼리마다 초기화
-      roundElMap   = {};
+      taskToolsMap = {}; roundElMap = {}; isStreaming = true;
 
-      var btn        = document.getElementById("btn");
-      btn.disabled   = true;
+      var btn    = document.getElementById("btn");
+      btn.disabled  = true;
       btn.textContent = "처리 중…";
-      input.disabled  = true;
-      input.value     = "";
+      textarea.disabled = true;
+      textarea.value = "";
+      textarea.style.height = "44px";
 
       appendUserMessage(queryText);
-      var els = createAssistantMessage();
-      var answerBody     = els.body;
-      var roundsBox      = els.roundsBox;
-      var refBlock       = els.refBlock;
-      var processLog     = els.processLog;
-      var processContent = els.processContent;
-      var processLines   = [];
-      currentRound       = 0;
+      var els           = createAssistantMessage();
+      var thinkingBlocks = els.thinkingBlocks;
+      var answerBody    = els.answerBody;
+      var refBlock      = els.refBlock;
+      var text          = "";
+      currentRound      = 0;
 
       var config = {
-
-        max_iterations:  parseInt(document.getElementById("conf-replan").value) || undefined,
-        temperature:     parseFloat(document.getElementById("conf-temp").value),
-        semantic_top_k:  parseInt(document.getElementById("conf-topk").value)   || undefined,
-        dense_weight:    parseFloat(document.getElementById("conf-dense").value),
-        sparse_weight:   parseFloat(document.getElementById("conf-sparse").value),
+        max_iterations: parseInt(document.getElementById("conf-replan").value) || undefined,
+        temperature:    parseFloat(document.getElementById("conf-temp").value),
+        semantic_top_k: parseInt(document.getElementById("conf-topk").value)   || undefined,
+        dense_weight:   parseFloat(document.getElementById("conf-dense").value),
+        sparse_weight:  parseFloat(document.getElementById("conf-sparse").value),
       };
 
       try {
@@ -777,7 +834,6 @@
 
         var reader  = res.body.getReader();
         var decoder = new TextDecoder();
-        var text    = "";
         var buf     = "";
 
         while (true) {
@@ -785,76 +841,62 @@
           if (chunk.done) break;
           buf += decoder.decode(chunk.value, { stream: true });
           var lines = buf.split("\n");
-          buf = lines.pop(); // 마지막 불완전한 줄은 다음 청크로 이월
+          buf = lines.pop();
+
           for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             if (!line.startsWith("data: ")) continue;
             try {
-              var payload = JSON.parse(line.slice(6));
-              if (payload.type === "orchestrator") {
-                markRoundDone(payload.round - 1);
-                addRound(roundsBox, payload.round, payload.reasoning, payload.tasks || []);
-                processLines.push("[ 라운드 " + payload.round + " ]");
-                processLines.push("  " + payload.reasoning.substring(0, 150) + (payload.reasoning.length > 150 ? "…" : ""));
-                (payload.tasks || []).forEach(function(t) {
-                  processLines.push("  ⚡ " + t.substring(0, 80) + (t.length > 80 ? "…" : ""));
-                });
+              var ev = JSON.parse(line.slice(6));
+
+              if (ev.type === "orchestrator") {
+                markRoundDone(ev.round - 1);
+                addRound(thinkingBlocks, ev.round, ev.reasoning, ev.tasks || []);
+
+              } else if (ev.type === "task_result") {
+                handleTaskResult(ev.round, ev.task, ev.tools || []);
+
+              } else if (ev.type === "token") {
+                text += ev.content;
+                answerBody.innerHTML = renderMarkdown(text) + '<span class="cursor">▋</span>';
                 scrollChat();
-              } else if (payload.type === "task_result") {
-                handleTaskResult(payload.round, payload.task, payload.tools || []);
-                var tLabel = payload.task.substring(0, 70) + (payload.task.length > 70 ? "…" : "");
-                processLines.push("  ▷ " + tLabel);
-                (payload.tools || []).forEach(function(tool) {
-                  processLines.push("    └→ [" + tool.name + "] " + tool.summary);
-                });
-                processContent.textContent = processLines.join("\n");
-                scrollChat();
-              } else if (payload.type === "token") {
-                text += payload.content;
-                answerBody.textContent = text;
-                scrollChat();
-              } else if (payload.type === "done") {
+
+              } else if (ev.type === "done") {
                 markRoundDone(currentRound);
-                if (payload.references && payload.references.length > 0) {
-                  refBlock.style.display = "flex";
-                  var refItems = payload.references.map(function(r) { 
-                    var t = r.title ? r.title.substring(0, 35) + (r.title.length > 35 ? '…' : '') : '';
-                    var titlePart = t ? '&quot;' + escHtml(t) + '&quot; ' : ''; 
-                    return '<span class="ref-item">[' + r.num + '] ' + escHtml(r.type) + ' ' + titlePart + '(' + escHtml(r.id) + ')</span>';
-                  }).join('');
-                  refBlock.innerHTML = '<span class="ref-label">출처</span><div class="ref-items">' + refItems + '</div>';
-                }
-                if (processLines.length > 0) {
-                  processLog.style.display = "block";
-                  processContent.textContent = processLines.join("\n");
+                answerBody.innerHTML = renderMarkdown(text) || "(응답 없음)";
+                if (ev.references && ev.references.length > 0) {
+                  refBlock.style.display = "block";
+                  var refItems = ev.references.map(function(r) {
+                    var title = r.title ? escHtml(r.title.substring(0, 30)) + (r.title.length > 30 ? "…" : "") : "";
+                    var label = title ? '"' + title + '" ' : "";
+                    return '<span class="ref-item ' + escHtml(r.type) + '">[' + r.num + '] ' + label + '(' + escHtml(r.id) + ')</span>';
+                  }).join("");
+                  refBlock.innerHTML = '<div class="ref-label">출처</div><div class="ref-items">' + refItems + '</div>';
                 }
                 scrollChat();
-              } else if (payload.type === "error") {
-                answerBody.textContent = "오류: " + payload.message;
+
+              } else if (ev.type === "error") {
+                answerBody.textContent = "오류: " + ev.message;
               }
-            } catch (e) { /* non-JSON line */ }
+            } catch(e) { /* non-JSON line */ }
           }
         }
 
-        if (!text) answerBody.textContent = "(응답 없음)";
-      } catch (e) {
+        if (!text && answerBody.textContent === "") answerBody.textContent = "(응답 없음)";
+      } catch(e) {
         answerBody.textContent = "연결 오류: " + e.message;
       } finally {
-        answerBody.classList.remove("streaming");
+        isStreaming = false;
         btn.disabled    = false;
         btn.textContent = "질의";
-        input.disabled  = false;
-        input.focus();
+        textarea.disabled = false;
+        textarea.focus();
         scrollChat();
       }
     }
 
-    document.getElementById("query").addEventListener("keydown", function(e) {
-      if (e.key === "Enter" && !e.shiftKey) search();
-    });
-
     function setQuery(text) {
-      document.getElementById("query").value = text;
+      textarea.value = text;
       search();
     }
   </script>

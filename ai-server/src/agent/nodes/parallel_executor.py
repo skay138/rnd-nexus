@@ -1,132 +1,97 @@
-import ast
 import asyncio
 import json
 import logging
 import time
 from typing import Any
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig
-from common.llm import get_llm
-from common.config.query_config import RequestConfig
-from common.parsers import summarize_tool_result, iter_entities, item_to_ref
-from collections import defaultdict
 
-from agent.state import RDAgentState
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
+
+from agent.state import RDAgentState, TaskSpec, TaskExecutionResult, ToolCallRecord
+from common.config.query_config import RequestConfig
+from common.llm import get_llm
+from common.parsers import clean_tool_result, summarize_tool_result
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 
 _WORKER_MAX_STEPS = 5
-_SEP = "─" * 50
 
 
-def _task_key(task: str) -> str:
-    return task.strip().lower()
+def _build_history_summary(task_execution_results: list[dict]) -> str:
+    """이전 라운드 완료 태스크·결과 요약 — 워커 중복 수집 방지용."""
+    completed: list[str] = []
+    empty_tools: list[str] = []
 
-
-def _clean_result(result_str: str) -> str:
-    """MCP 결과에서 entity JSON을 추출해 LLM 친화적 텍스트로 변환."""
-    if result_str.startswith("[ERROR]"):
-        return result_str
-    try:
-        items = json.loads(result_str)
-    except Exception:
-        try:
-            items = ast.literal_eval(result_str)
-        except Exception:
-            return result_str
-    if not isinstance(items, list):
-        return result_str
-    entities = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == "text":
-            try:
-                d = json.loads(item["text"])
-                if isinstance(d, list):
-                    entities.extend(d)
-                else:
-                    entities.append(d)
-            except Exception:
-                pass
+    for result in task_execution_results:
+        task_desc = result.get("task_description", "")[:50]
+        summaries = [
+            tc["summary"]
+            for tc in result.get("tool_calls", [])
+            if not tc.get("is_error") and tc.get("summary")
+        ]
+        if summaries:
+            completed.append(f"- {task_desc}: {', '.join(summaries[:3])}")
         else:
-            entities.append(item)
-    return json.dumps(entities, ensure_ascii=False, indent=2) if entities else result_str
-
-
-def _build_history_summary(state_tool_results: dict[str, list[str]]) -> str:
-    """이전 라운드들의 도구 실행 결과에서 수집 엔티티 요약 + 빈 결과 검색 목록 반환"""
-    entities_by_type: dict[str, list[str]] = defaultdict(list)
-    seen_ids: set[str] = set()
-    empty_results: list[str] = []
-
-    for tool_name, results in state_tool_results.items():
-        for res in results:
-            entities = list(iter_entities(res))
-            if entities:
-                for d in entities:
-                    ref = item_to_ref(d)
-                    if not ref:
-                        continue
-                    eid = ref["id"]
-                    if not eid or eid in seen_ids:
-                        continue
-                    seen_ids.add(eid)
-                    entities_by_type[ref["type"]].append(f"{ref['title']} ({eid})")
-            elif not str(res).startswith("[ERROR]"):
-                # 빈 결과 — 어떤 도구에서 나왔는지만 기록 (중복 방지)
-                entry = f"{tool_name}: 빈 결과"
-                if entry not in empty_results:
-                    empty_results.append(entry)
+            for tc in result.get("tool_calls", []):
+                if not tc.get("is_error"):
+                    entry = f"{tc['tool_name']}: 빈 결과"
+                    if entry not in empty_tools:
+                        empty_tools.append(entry)
 
     lines: list[str] = []
-    if entities_by_type:
-        lines.append("[이전 라운드 수집 데이터 요약]")
-        for ntype, items in entities_by_type.items():
-            display_items = items[:15]
-            suffix = f" 외 {len(items)-15}건" if len(items) > 15 else ""
-            lines.append(f"- {ntype}: {', '.join(display_items)}{suffix}")
-
-    if empty_results:
+    if completed:
+        lines.append("[이전 라운드 완료된 태스크]")
+        lines.extend(completed[:20])
+    if empty_tools:
         lines.append("[이전 라운드에서 결과 없었던 검색 — 같은 방식 반복 금지]")
-        for e in empty_results[:10]:
-            lines.append(f"- {e}")
+        lines.extend(f"- {e}" for e in empty_tools[:10])
 
     return "\n".join(lines) if lines else ""
 
 
 async def _run_worker(
-    task: str,
+    task: TaskSpec,
     tools_by_name: dict[str, Any],
-    settings,
+    settings: Any,
+    current_round: int = 0,
     original_query: str = "",
     history_summary: str = "",
     sse_queue: asyncio.Queue | None = None,
-    current_round: int = 0,
-) -> list[tuple[str, str]]:
+) -> tuple[TaskExecutionResult, list]:
+    """Mini ReAct agent — TaskSpec을 받아 도구를 선택·실행하고
+    (TaskExecutionResult, worker_messages) 튜플을 반환한다.
+
+    worker_messages: state.messages에 추가할 AIMessage(tool_calls) + ToolMessage 쌍.
     """
-    Mini ReAct agent — 태스크 설명을 받아 필요한 도구를 스스로 선택·실행하고
-    [(tool_name, result_str), ...] 목록을 반환합니다.
-    """
+    task_id = task["id"]
+    task_description = task["description"]
+    tool_calls: list[ToolCallRecord] = []
+    messages_for_state: list = []   # state.messages에 추가할 tool 상호작용 메시지
+
     llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
-    system = SystemMessage(content="""당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
-[태스크]가 최우선입니다. [원본 질문]은 태스크에 키워드가 생략되거나 지시대명사가 있을 때만 보충 참고하세요.
-충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.
+    system = SystemMessage(content="""<role>
+당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
+</role>
 
-엔티티 상세 정보(소속·전문분야·초록 등)가 필요하면 get_entities를 호출하라.""")
-    if original_query:
-        task_content = f"[원본 질문]\n{original_query}\n\n[태스크]\n{task}"
-    else:
-        task_content = task
-        
+<instructions>
+- [태스크]가 최우선입니다. [원본 질문]은 태스크에 키워드가 생략되거나 지시대명사가 있을 때만 보충 참고하세요.
+- 검색으로 ID를 확보한 경우 상세 조회 도구를 추가로 호출해 소속·전문분야·초록 등 상세 정보를 수집하라.
+- 충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.
+- [이전 라운드 완료된 태스크]가 제공된 경우 동일한 검색을 반복하지 마라.
+</instructions>""")
+
+    task_content = (
+        f"[원본 질문]\n{original_query}\n\n[태스크]\n{task_description}"
+        if original_query
+        else task_description
+    )
     if history_summary:
         task_content += f"\n\n{history_summary}"
-        
+
     messages: list = [system, HumanMessage(content=task_content)]
-    collected: list[tuple[str, str]] = []
     seen_calls: set[str] = set()
 
     try:
@@ -135,18 +100,31 @@ async def _run_worker(
             messages.append(response)
 
             if not getattr(response, "tool_calls", None):
-                logger.debug("[worker:%s] ✓ 완료 (step=%d, 수집=%d건)", task[:40], step + 1, len(collected))
+                logger.debug(
+                    "[WORKER] %-38s  ✓ done  %d steps  %d tools",
+                    f'"{task_description[:35]}"', step + 1, len(tool_calls),
+                )
                 break
+
+            # tool_calls가 있는 AIMessage → state에 포함
+            messages_for_state.append(response)
 
             for tc in response.tool_calls:
                 tool_name = tc["name"]
                 tool_args = tc.get("args", {})
                 call_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True, ensure_ascii=False)}"
+
                 if call_key in seen_calls:
-                    logger.debug("[worker:%s] 중복 호출 건너뜀: %s", task[:40], call_key[:80])
-                    messages.append(ToolMessage(content="[SKIP] 이미 동일한 호출 결과가 있습니다.", tool_call_id=tc["id"]))
+                    logger.debug("[worker:%s] 중복 호출 건너뜀: %s", task_description[:40], call_key[:80])
+                    skip_msg = ToolMessage(
+                        content="[SKIP] 이미 동일한 호출 결과가 있습니다.",
+                        tool_call_id=tc["id"],
+                    )
+                    messages.append(skip_msg)
+                    messages_for_state.append(skip_msg)
                     continue
                 seen_calls.add(call_key)
+
                 t0 = time.perf_counter()
                 try:
                     result = await tools_by_name[tool_name].ainvoke(tool_args)
@@ -156,107 +134,148 @@ async def _run_worker(
                 except Exception as e:
                     result_str = f"[ERROR] {tool_name} 실패: {type(e).__name__}: {e}"
                 elapsed = time.perf_counter() - t0
+
+                result_text = clean_tool_result(result_str)
+                summary = summarize_tool_result(result_str)
+                is_error = result_str.startswith("[ERROR]")
+
+                record: ToolCallRecord = {
+                    "tool_name":   tool_name,
+                    "args":        tool_args,
+                    "result_text": result_text,
+                    "summary":     summary,
+                    "is_error":    is_error,
+                }
+                tool_calls.append(record)
+
+                tool_msg = ToolMessage(content=result_text, tool_call_id=tc["id"])
+                messages.append(tool_msg)
+                messages_for_state.append(tool_msg)   # state에 포함
+
                 logger.debug(
-                    "[worker:%s] step=%d  %s  (%.2fs)\n  args: %s\n  → %s",
-                    task[:40], step + 1, tool_name, elapsed,
-                    json.dumps(tool_args, ensure_ascii=False, separators=(",", ":")),
-                    summarize_tool_result(result_str),
+                    "[WORKER] %-38s  step=%d  %s  %.2fs\n  in  | %s\n  out | %s",
+                    f'"{task_description[:35]}"', step + 1, tool_name, elapsed,
+                    json.dumps(tool_args, ensure_ascii=False),
+                    summary,
                 )
-                collected.append((tool_name, result_str))
-                # LLM에게는 정제된 결과 전달 — raw MCP wrapper 제거로 이전 스텝 파악 용이
-                messages.append(ToolMessage(content=_clean_result(result_str), tool_call_id=tc["id"]))
+
                 if sse_queue is not None:
                     await sse_queue.put(("worker_result", {
-                        "type":  "task_result",
-                        "round": current_round,
-                        "task":  task,
-                        "tools": [{"name": tool_name, "summary": summarize_tool_result(result_str)}],
+                        "type":    "task_result",
+                        "task_id": task_id,
+                        "round":   current_round,
+                        "task":    task_description,
+                        "tools":   [{"name": tool_name, "summary": summary}],
                     }))
 
-        return collected
+        has_data  = any(not r["is_error"] for r in tool_calls)
+        has_error = any(r["is_error"] for r in tool_calls)
+        status = "error" if (has_error and not has_data) else ("empty" if not tool_calls else "completed")
+
+        result: TaskExecutionResult = {
+            "task_id":          task_id,
+            "task_description": task_description,
+            "round":            current_round,
+            "status":           status,
+            "tool_calls":       tool_calls,
+        }
+        return result, messages_for_state
+
     except Exception as e:
-        logger.error("[worker:%s] 에러 발생: %s", task[:40], e)
-        # 에러 발생 시 진행 중이던 collected 내용과 함께 에러 메시지를 반환하여 격리
-        collected.append(("worker_error", f"[ERROR] 워커 실행 중 에러 발생 ({type(e).__name__}): {e}"))
-        return collected
+        logger.error("[worker:%s] 에러: %s", task_description[:40], e)
+        err_result: TaskExecutionResult = {
+            "task_id":          task_id,
+            "task_description": task_description,
+            "round":            current_round,
+            "status":           "error",
+            "tool_calls":       tool_calls + [{
+                "tool_name":   "worker_error",
+                "args":        {},
+                "result_text": f"[ERROR] 워커 실행 중 에러 ({type(e).__name__}): {e}",
+                "summary":     "워커 오류",
+                "is_error":    True,
+            }],
+        }
+        return err_result, messages_for_state
 
 
 async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     tools_by_name: dict[str, Any] = config["configurable"]["tools_by_name"]
-    pending_tasks: list[str] = state.get("pending_tasks", [])
-    executed: list[str] = list(state.get("executed_tasks", []))
+    pending_tasks: list[TaskSpec] = state.get("pending_tasks", [])
 
     if not pending_tasks:
-        return {"pending_tasks": [], "executed_tasks": executed}
+        return {"pending_tasks": []}
 
-    already_run = {_task_key(t) for t in executed}
-    seen_in_batch: set[str] = set()
-    fresh_tasks: list[str] = []
-    for t in pending_tasks:
-        k = _task_key(t)
-        if k not in already_run and k not in seen_in_batch:
-            seen_in_batch.add(k)
-            fresh_tasks.append(t)
-
-    skipped = len(pending_tasks) - len(fresh_tasks)
-    if skipped:
-        logger.debug("[parallel_executor] %d개 태스크 중복으로 건너뜀", skipped)
-
-    if not fresh_tasks:
-        logger.debug("[parallel_executor] 실행할 새 태스크 없음 — generate로 단락")
-        return {"pending_tasks": [], "executed_tasks": executed}
-
-    logger.debug("[parallel_executor] %s\n  워커 %d개 시작: %s",
-                 _SEP, len(fresh_tasks), " | ".join(t[:30] for t in fresh_tasks))
+    fresh_tasks = pending_tasks
 
     current_round   = state.get("iteration_count", 0)
     original_query  = RequestConfig.current().original_query
-    history_summary = _build_history_summary(state.get("tool_results", {}))
+    history_summary = _build_history_summary(state.get("task_execution_results", []))
     sse_queue: asyncio.Queue | None = config["configurable"].get("sse_queue")
 
-    async def _run_and_emit(task: str) -> list[tuple[str, str]]:
+    logger.debug(
+        "[EXEC] round=%d  workers=%d\n%s",
+        current_round, len(fresh_tasks),
+        "\n".join(f"  dispatch | {t['description'][:60]}" for t in fresh_tasks),
+    )
+
+    async def _run_and_emit(task: TaskSpec) -> tuple[TaskExecutionResult, list]:
         return await _run_worker(
-            task, tools_by_name, settings, original_query, history_summary,
-            sse_queue=sse_queue, current_round=current_round,
+            task, tools_by_name, settings,
+            current_round=current_round,
+            original_query=original_query,
+            history_summary=history_summary,
+            sse_queue=sse_queue,
         )
 
     t0_all = time.perf_counter()
-    worker_results = await asyncio.gather(*[_run_and_emit(t) for t in fresh_tasks])
+    worker_outputs: list[tuple[TaskExecutionResult, list]] = list(
+        await asyncio.gather(*[_run_and_emit(t) for t in fresh_tasks])
+    )
     total_elapsed = time.perf_counter() - t0_all
 
-    summary = "  " + "\n  ".join(
-        f"{t[:25]}: {sum(1 for _ in pairs)}개 툴호출"
-        for t, pairs in zip(fresh_tasks, worker_results)
+    new_results    = [r for r, _ in worker_outputs]
+    # 각 워커의 AIMessage(tool_calls) + ToolMessage 쌍 — state.messages에 직접 포함
+    worker_messages = [msg for _, msgs in worker_outputs for msg in msgs]
+
+    logger.debug(
+        "[EXEC] done  %.2fs\n%s",
+        total_elapsed,
+        "\n".join(
+            f"  {'✓' if r['status'] == 'completed' else '✗'} \"{r['task_description'][:50]}\"  "
+            f"{len(r['tool_calls'])} calls  {r['status']}"
+            for r in new_results
+        ),
     )
-    logger.debug("[parallel_executor] 완료 %.2fs\n%s\n%s", total_elapsed, summary, _SEP)
 
-    updated: dict[str, list[str]] = dict(state.get("tool_results", {}))
-    new_task_results: list[dict] = []
-    msg_lines: list[str] = []
-
-    for task, tool_pairs in zip(fresh_tasks, worker_results):
-        tool_lines = [f"[{tool_name}]\n{_clean_result(result_str)}" for tool_name, result_str in tool_pairs]
-        msg_lines.append(f"# {task[:40]}\n" + "\n\n".join(tool_lines))
-        for tool_name, result_str in tool_pairs:
-            updated[tool_name] = updated.get(tool_name, []) + [result_str]
-        new_task_results.append({
-            "round": current_round,
-            "task":  task,
-            "tools": [{"name": tn, "summary": summarize_tool_result(rs)} for tn, rs in tool_pairs],
-        })
-
-    executed.extend(fresh_tasks)
-
-    result_message = AIMessage(
-        content="\n\n---\n\n".join(msg_lines),
+    # 구조화된 요약 AIMessage — multi-turn에서 extract_results_from_messages가 파싱하는 마커
+    msg_data = [
+        {
+            "task_id":          r["task_id"],
+            "task_description": r["task_description"],
+            "round":            r["round"],
+            "tool_calls": [
+                {
+                    "tool_name":   tc["tool_name"],
+                    "result_text": tc["result_text"],
+                    "summary":     tc["summary"],
+                    "is_error":    tc["is_error"],
+                }
+                for tc in r["tool_calls"]
+            ],
+        }
+        for r in new_results
+    ]
+    summary_message = AIMessage(
+        content=json.dumps(msg_data, ensure_ascii=False),
         name="tool_results",
     )
 
+    accumulated = list(state.get("task_execution_results", [])) + new_results
+
     return {
-        "messages":       [result_message],
-        "tool_results":   updated,
-        "task_results":   list(state.get("task_results", [])) + new_task_results,
-        "pending_tasks":  [],
-        "executed_tasks": executed,
+        "messages":               worker_messages + [summary_message],
+        "task_execution_results": accumulated,
+        "pending_tasks":          [],
     }

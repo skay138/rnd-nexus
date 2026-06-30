@@ -4,11 +4,30 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 
+class TaskSpec(TypedDict):
+    id: str           # description SHA1 앞 8자
+    description: str
+
+
+class ToolCallRecord(TypedDict):
+    tool_name: str
+    args: dict
+    result_text: str   # MCP 래퍼 제거 후 순수 entity JSON — iter_entities 파싱 가능
+    summary: str       # 예: "3건: 김민준, 이서연"
+    is_error: bool
+
+
+class TaskExecutionResult(TypedDict):
+    task_id: str
+    task_description: str
+    round: int         # 실행 시점의 iteration_count
+    status: str        # "completed" | "empty" | "error"
+    tool_calls: list[ToolCallRecord]
+
+
 class RDAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
-    tool_results: dict[str, list[str]]
+    pending_tasks: list[TaskSpec]               # orchestrator → parallel_executor
+    task_execution_results: list[TaskExecutionResult]  # 단일 소스 (현재 턴)
     iteration_count: int
-    pending_tasks: list[str]    # orchestrator → parallel_executor (태스크 설명 문자열)
-    executed_tasks: list[str]   # 중복 차단용 (실행된 태스크 설명)
-    task_results: list[dict]    # [{round, task, tools:[{name,summary}]}] — UI per-task 표시용
-    out_of_scope: bool          # 지원 범위 외 질문 — generate가 LLM 호출 없이 안내 반환
+    out_of_scope: bool
