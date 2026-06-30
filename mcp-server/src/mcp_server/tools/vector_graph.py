@@ -1,15 +1,15 @@
-"""MCP 도구: 시맨틱 벡터 진입 + 그래프 다중 홉 탐색 (researcher-nexus ExecutionEngine 패턴)"""
+"""MCP 도구: 시맨틱 벡터 진입 + 그래프 다중 홉 탐색"""
 from __future__ import annotations
 import logging
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
-from infrastructure.graph_compiler import compile_hop
+from infrastructure.graph_compiler import compile_hop, SCHEMA_HINT
 
 logger = logging.getLogger(__name__)
 
 
-def register_graph_search_tools(mcp: FastMCP) -> None:
+def register_vector_graph_tools(mcp: FastMCP) -> None:
     from infrastructure.component_factory import repository_factory
 
     @mcp.tool()
@@ -20,47 +20,52 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
         top_k: int = 10,
     ) -> list[dict[str, Any]]:
         """
-        관계를 통해 연결된 다른 타입의 엔티티를 찾을 때만 사용하세요 (예: 기술→연구자, 과제→연구자, 논문→저자).
-        entry_type 엔티티를 시맨틱 검색으로 찾은 뒤, hops에 정의된 Neo4j 관계를 따라 target_type 엔티티로 이동합니다.
+        <role>
+        관계를 통해 연결된 다른 타입의 엔티티를 찾을 때 사용합니다 (예: 기술→연구자, 과제→연구자, 논문→저자).
         동일 타입 엔티티만 필요하면 semantic_search를 사용하세요.
+        </role>
 
-        [사용 가능한 relation 값]
-        Researcher→Paper     : "authored"       / Paper→Researcher    : "authored_by"
-        Researcher→Patent    : "invented"        / Patent→Researcher   : "invented_by"
-        Researcher→Technology: "researches"      / Technology→Researcher: "researched_by"
-        Researcher→Organization: "works_at"      / Organization→Researcher: "has_researcher"
-        Paper→Paper          : "cites"           / Paper←Paper         : "cited_by"
-        Project→Researcher   : "employs"         / Researcher→Project  : "employed_by"
-        Project→Technology   : "uses"            / Technology→Project  : "used_by"
+        <instructions>
+        - entry_type 엔티티를 시맨틱 검색으로 찾은 뒤, hops에 정의된 Neo4j 관계를 따라 target_type으로 이동합니다
+        - 2~3홉 연결도 지원합니다 (예: 기술→연구자→기관)
+        - 각 hop: {"relation": "ACTUAL_TYPE", "direction": "in"|"out", "target_type": "NodeLabel"}
+          direction="out": (현재노드)-[:REL]->(target)  /  direction="in": (현재노드)<-[:REL]-(target)
+          direction 생략 시 "out" 기본값
 
         [사용 예시]
         1. "AI 반도체 분야 핵심 연구자 추천"
            entry_type="Technology",
-           hops=[{"relation": "researched_by", "target_type": "Researcher"}]
+           hops=[{"relation":"RESEARCHES","direction":"in","target_type":"Researcher"}]
 
         2. "뉴로모픽 논문 저자들의 소속 기관"
            entry_type="Paper",
-           hops=[{"relation": "authored_by",  "target_type": "Researcher"},
-                 {"relation": "works_at",      "target_type": "Organization"}]
+           hops=[{"relation":"AUTHORED",  "direction":"in", "target_type":"Researcher"},
+                 {"relation":"WORKS_AT",  "direction":"out","target_type":"Organization"}]
 
         3. "PIM 기술을 활용한 국가 R&D 과제"
            entry_type="Technology",
-           hops=[{"relation": "used_by", "target_type": "Project"}]
+           hops=[{"relation":"USES","direction":"in","target_type":"Project"}]
 
         4. "특정 논문을 인용한 후속 연구 논문"
            entry_type="Paper",
-           hops=[{"relation": "cited_by", "target_type": "Paper"}]
+           hops=[{"relation":"CITES","direction":"out","target_type":"Paper"}]
+
+        5. "AI 반도체 연구자가 참여하는 과제"
+           entry_type="Researcher",
+           hops=[{"relation":"EMPLOYS","direction":"in","target_type":"Project"}]
+        </instructions>
 
         Args:
             query:      시맨틱 검색 쿼리 (자연어. 예: "AI 반도체 저전력 설계")
-            entry_type: 진입 노드 타입 (Paper / Patent / Technology / Researcher / Project)
-            hops:       관계 홉 목록. 각 항목: {"relation": str, "target_type": str}
+            entry_type: 진입 노드 타입 (Paper / Patent / Technology / Researcher / Project / Organization)
+            hops:       관계 홉 목록. 각 항목: {"relation": str, "direction": "in"|"out", "target_type": str}
                         최대 3홉 권장 (성능상)
             top_k:      최종 반환할 최대 결과 수
 
         Returns:
             [{id, name, node_type, score, path}, ...] — score 내림차순 정렬
-            path 필드는 "semantic(Technology:'뉴로모픽') -[researched_by]-> Researcher('홍길동')" 형태
+            path: "semantic(Technology:'뉴로모픽') -[researched_by]-> Researcher('홍길동')" 형태
+            score: 진입 엔티티의 유사도가 홉을 통해 전파된 값 (0~1)
         """
         search_fn = repository_factory.get_vector_search_fn()
         if search_fn is None:
@@ -107,19 +112,25 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
         for hop_idx, hop in enumerate(hops):
             relation    = hop.get("relation", "")
             target_type = hop.get("target_type", "")
+            direction   = hop.get("direction", "out")
 
             if not relation or not target_type:
                 logger.warning("[GraphSearch] hop[%d] 형식 오류 (relation/target_type 필수): %s", hop_idx, hop)
                 continue
 
-            cypher = compile_hop(
-                from_type=current_type,
-                relation=relation,
-                to_type=target_type,
-                start_ids=current_ids,
-                limit=top_k * 10,
-                exclude_ids=list(visited - set(current_ids)),
-            )
+            try:
+                cypher = compile_hop(
+                    start_ids=current_ids,
+                    relation=relation,
+                    direction=direction,
+                    target_type=target_type,
+                    from_type=current_type,
+                    limit=top_k * 10,
+                    exclude_ids=list(visited - set(current_ids)),
+                )
+            except ValueError as exc:
+                logger.warning("[GraphSearch] hop[%d] compile_hop 오류: %s", hop_idx, exc)
+                break
             logger.debug("[GraphSearch] hop[%d] cypher: %s", hop_idx, cypher)
 
             try:
@@ -144,7 +155,6 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
 
                 parent_score = scores.get(src_id, 0.0) if src_id else 0.0
 
-                # 동일 자식에 여러 부모가 있으면 최고 점수 선택
                 if nid not in hop_scores or parent_score > hop_scores[nid]:
                     hop_scores[nid] = parent_score
                     hop_names[nid]  = name
@@ -153,7 +163,6 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
                         f"{parent_path} -[{relation}]-> {target_type}('{name}')"
                     )
 
-            # 다음 홉 입력 크기를 top_k * 2로 제한 (성능)
             sorted_hop = sorted(hop_scores.items(), key=lambda x: x[1], reverse=True)
             sorted_hop = sorted_hop[: top_k * 2]
 
@@ -170,7 +179,7 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
             current_type = target_type
 
         # ── Step 3: score 임계값 필터 후 최종 정렬 반환 ──────────────────────
-        _SCORE_THRESHOLD = 0.2
+        _SCORE_THRESHOLD = 0.2  # 전파 점수(희석) 보정 — vector.py(0.3)보다 낮게 설정
         final_ids = sorted(
             [nid for nid in current_ids if scores.get(nid, 0.0) >= _SCORE_THRESHOLD],
             key=lambda x: scores.get(x, 0.0),
@@ -187,3 +196,5 @@ def register_graph_search_tools(mcp: FastMCP) -> None:
             }
             for nid in final_ids
         ]
+
+    semantic_graph_search.__doc__ = (semantic_graph_search.__doc__ or "") + SCHEMA_HINT

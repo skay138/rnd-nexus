@@ -11,10 +11,9 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Optional, Protocol, runtime_checkable
 
 CONFIG_DEFAULTS: dict[str, Any] = {
-    "temperature":     0.0,
-    "semantic_top_k":  20,
-    "dense_weight":    0.5,
-    "sparse_weight":   0.5,
+    "temperature":    0.0,
+    "semantic_top_k": 20,
+    "keyword_weight": 0.5,
 }
 
 
@@ -28,8 +27,7 @@ class QueryConfig:
     max_iterations:     Optional[int]   = None  # 오케스트레이터 최대 라운드 수
     temperature:        Optional[float] = None  # LLM temperature
     semantic_top_k:     Optional[int]   = None  # Milvus 시맨틱 검색 top-k
-    dense_weight:       Optional[float] = None  # hybrid search dense 가중치
-    sparse_weight:      Optional[float] = None  # hybrid search sparse 가중치
+    keyword_weight:     Optional[float] = None  # BM25 키워드 가중치 (0=의미, 1=키워드)
 
 
 @runtime_checkable
@@ -97,8 +95,7 @@ class RequestConfig:
             max_iterations     = _pick("max_iterations",     o.max_iterations),
             temperature        = _pick("temperature",        o.temperature),
             semantic_top_k     = _pick("semantic_top_k",     o.semantic_top_k),
-            dense_weight       = _pick("dense_weight",       o.dense_weight),
-            sparse_weight      = _pick("sparse_weight",      o.sparse_weight),
+            keyword_weight     = _pick("keyword_weight",     o.keyword_weight),
         )
 
     @classmethod
@@ -151,12 +148,8 @@ class RequestConfig:
         return self.get("semantic_top_k")
 
     @property
-    def dense_weight(self) -> float:
-        return self.get("dense_weight")
-
-    @property
-    def sparse_weight(self) -> float:
-        return self.get("sparse_weight")
+    def keyword_weight(self) -> float:
+        return self.get("keyword_weight")
 
     @property
     def original_query(self) -> str:

@@ -21,6 +21,19 @@ class MariaDBOrganizationRepository(OrganizationRepository):
                 rows = cur.fetchall()
         return [Organization(**row) for row in rows]
 
+    def get_all(self, name: str = "", limit: int = 50) -> List[Organization]:
+        if name:
+            sql = "SELECT * FROM organizations WHERE name LIKE %s LIMIT %s"
+            params: list = [f"%{name}%", limit]
+        else:
+            sql = "SELECT * FROM organizations LIMIT %s"
+            params = [limit]
+        with self.db_pool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+        return [Organization(**row) for row in rows]
+
 
 class InMemoryOrganizationRepository(OrganizationRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
@@ -29,3 +42,11 @@ class InMemoryOrganizationRepository(OrganizationRepository):
     def get_by_ids(self, ids: List[str]) -> List[Organization]:
         id_set = set(ids)
         return [Organization(**o) for o in self.organizations if o.get("org_id") in id_set]
+
+    def get_all(self, name: str = "", limit: int = 50) -> List[Organization]:
+        name_lower = name.lower()
+        results = [
+            Organization(**o) for o in self.organizations
+            if not name_lower or name_lower in o.get("name", "").lower()
+        ]
+        return results[:limit]

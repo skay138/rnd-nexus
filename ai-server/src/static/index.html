@@ -483,12 +483,8 @@
           <input type="number" id="conf-topk" value="20" min="5" max="100" step="5">
         </div>
         <div class="setting-group">
-          <label>Dense Weight</label>
-          <input type="number" id="conf-dense" value="0.3" min="0" max="1" step="0.1">
-        </div>
-        <div class="setting-group">
-          <label>Sparse Weight</label>
-          <input type="number" id="conf-sparse" value="0.7" min="0" max="1" step="0.1">
+          <label>Keyword Weight</label>
+          <input type="number" id="conf-keyword" value="0.5" min="0" max="1" step="0.1">
         </div>
       </div>
 
@@ -849,8 +845,7 @@
         max_iterations: parseInt(document.getElementById("conf-replan").value) || undefined,
         temperature:    parseFloat(document.getElementById("conf-temp").value),
         semantic_top_k: parseInt(document.getElementById("conf-topk").value)   || undefined,
-        dense_weight:   parseFloat(document.getElementById("conf-dense").value),
-        sparse_weight:  parseFloat(document.getElementById("conf-sparse").value),
+        keyword_weight: parseFloat(document.getElementById("conf-keyword").value),
       };
 
       try {

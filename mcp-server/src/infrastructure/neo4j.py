@@ -80,22 +80,30 @@ def make_fetch_researcher_network_fn(driver: Any) -> Any:
 def make_fetch_citation_graph_fn(driver: Any) -> Any:
     """
     논문 인용 네트워크 조회 콜백.
-    인터페이스: (paper_title: str, depth: int) -> list[dict[str, Any]]
+    인터페이스: (paper_title: str, paper_id: str, depth: int) -> list[dict[str, Any]]
+    paper_id 제공 시 ID 정확 매칭 우선, 미제공 시 paper_title 부분 일치.
     """
-    def fetch_citation_graph(paper_title: str, depth: int = 2) -> list[dict[str, Any]]:
+    def fetch_citation_graph(paper_title: str, paper_id: str = "", depth: int = 2) -> list[dict[str, Any]]:
         t0 = time.perf_counter()
         safe_depth = min(max(depth, 1), 3)
+        if paper_id:
+            where = "WHERE p.id = $pid"
+            params: dict[str, Any] = {"pid": paper_id}
+        else:
+            where = "WHERE p.title CONTAINS $title"
+            params = {"title": paper_title}
         cypher = (
-            "MATCH path = (p:Paper)-[:CITES*1.." + str(safe_depth) + "]->(cited:Paper) "
-            "WHERE p.title CONTAINS $title "
-            "RETURN p.title AS source, cited.title AS target, "
+            f"MATCH path = (p:Paper)-[:CITES*1..{safe_depth}]->(cited:Paper) "
+            f"{where} "
+            "RETURN p.title AS source, p.id AS source_id, "
+            "cited.title AS target, cited.id AS target_id, "
             "cited.year AS year, length(path) AS hops "
             "LIMIT 50"
         )
         with driver.session() as session:
-            result = session.run(cypher, title=paper_title)
+            result = session.run(cypher, **params)
             rows: list[dict[str, Any]] = [dict(r.data()) for r in result]
-        logger.debug("[Neo4j] citation_graph '%s': %d edges  %.1f ms",
-                     paper_title, len(rows), (time.perf_counter() - t0) * 1000)
+        logger.debug("[Neo4j] citation_graph id='%s' title='%s': %d edges  %.1f ms",
+                     paper_id, paper_title, len(rows), (time.perf_counter() - t0) * 1000)
         return rows
     return fetch_citation_graph

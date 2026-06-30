@@ -37,6 +37,8 @@ def make_vector_search_fn(
         top_k: int = 20,
         dense_weight: float = 0.5,
         sparse_weight: float = 0.5,
+        year_from: int = 0,
+        year_to: int = 0,
     ) -> list[tuple[str, float, str, str]]:
         from pymilvus import AnnSearchRequest, WeightedRanker
 
@@ -46,6 +48,10 @@ def make_vector_search_fn(
         filter_parts: list[str] = []
         if node_type:
             filter_parts.append(f'node_type == "{node_type}"')
+        if year_from:
+            filter_parts.append(f"year >= {year_from}")
+        if year_to:
+            filter_parts.append(f"year <= {year_to}")
         expr = " && ".join(filter_parts)
 
         search_limit = top_k * 2

@@ -8,8 +8,7 @@ class ConfigOverride(BaseModel):
     max_iterations:  Optional[int]   = None
     temperature:     Optional[float] = None
     semantic_top_k:  Optional[int]   = None
-    dense_weight:    Optional[float] = None
-    sparse_weight:   Optional[float] = None
+    keyword_weight:  Optional[float] = None
 
 
 class QueryRequest(BaseModel):

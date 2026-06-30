@@ -32,7 +32,8 @@ class RepositoryFactory:
         self._technology_repo: Optional[TechnologyRepository] = None
 
         # Milvus / Neo4j (lazy init)
-        self._vector_search_fn: Optional[Callable] = None
+        # None = 미시도, False = 초기화 실패(재시도 방지 sentinel), 실제값 = 성공
+        self._vector_search_fn: Any = None
         self._neo4j_driver: Any = None
         self._graph_query_fn: Optional[Callable] = None
         self._researcher_network_fn: Optional[Callable] = None
@@ -102,7 +103,7 @@ class RepositoryFactory:
 
     def get_vector_search_fn(self) -> Optional[Callable]:
         if self._vector_search_fn is not None:
-            return self._vector_search_fn
+            return self._vector_search_fn if self._vector_search_fn is not False else None
         settings = get_settings()
         if not settings.milvus_host:
             return None
@@ -118,6 +119,7 @@ class RepositoryFactory:
             )
         except Exception as e:
             logger.warning("[Milvus] 초기화 실패: %s", e)
+            self._vector_search_fn = False  # 재시도 방지 sentinel
             return None
         return self._vector_search_fn
 
@@ -125,7 +127,7 @@ class RepositoryFactory:
 
     def _get_neo4j_driver(self) -> Any:
         if self._neo4j_driver is not None:
-            return self._neo4j_driver
+            return self._neo4j_driver if self._neo4j_driver is not False else None
         settings = get_settings()
         if not settings.neo4j_uri:
             return None
@@ -137,6 +139,8 @@ class RepositoryFactory:
             )
         except Exception as e:
             logger.warning("[Neo4j] 드라이버 초기화 실패: %s", e)
+            self._neo4j_driver = False  # 재시도 방지 sentinel
+            return None
         return self._neo4j_driver
 
     def get_graph_query_fn(self) -> Optional[Callable]:

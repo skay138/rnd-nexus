@@ -1,7 +1,6 @@
 """
 R&D Nexus Graph Compiler
-LLM의 추상 관계 개념(relation)을 Neo4j Cypher로 변환합니다.
-LLM은 Cypher를 직접 작성하지 않고 관계명만 지정합니다.
+Neo4j 관계 타입과 Cypher 쿼리 생성 유틸리티.
 """
 
 from __future__ import annotations
@@ -10,70 +9,75 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# rnd-nexus Neo4j 스키마 기준 관계 매핑
-# key : LLM이 지정하는 추상 개념 (소문자, 언더스코어)
-# value: (Neo4j 관계 타입, 방향)  out=정방향  in=역방향
-_RELATION_MAP: dict[str, tuple[str, str]] = {
-    # Researcher → Paper
-    "authored":          ("AUTHORED", "out"),
-    "authored_by":       ("AUTHORED", "in"),
-    "writes":            ("AUTHORED", "out"),
-    "written_by":        ("AUTHORED", "in"),
-    # Researcher → Patent
-    "invented":          ("INVENTED", "out"),
-    "invented_by":       ("INVENTED", "in"),
-    # Researcher → Technology
-    "researches":        ("RESEARCHES", "out"),
-    "researched_by":     ("RESEARCHES", "in"),
-    "in_field":          ("RESEARCHES", "in"),
-    # Researcher → Organization
-    "works_at":          ("WORKS_AT", "out"),
-    "has_researcher":    ("WORKS_AT", "in"),
-    # Paper → Paper
-    "cites":             ("CITES", "out"),
-    "cited_by":          ("CITES", "in"),
-    # Project → Researcher
-    "employs":           ("EMPLOYS", "out"),
-    "employed_by":       ("EMPLOYS", "in"),
-    # Project → Technology
-    "uses":              ("USES", "out"),
-    "used_by":           ("USES", "in"),
+# 단일 소스 오브 트루스 — 실제 Neo4j 관계 타입 7개
+_NEO4J_RELATIONS: dict[str, tuple[str, str]] = {
+    "AUTHORED":   ("Researcher", "Paper"),
+    "INVENTED":   ("Researcher", "Patent"),
+    "RESEARCHES": ("Researcher", "Technology"),
+    "WORKS_AT":   ("Researcher", "Organization"),
+    "CITES":      ("Paper",      "Paper"),
+    "EMPLOYS":    ("Project",    "Researcher"),
+    "USES":       ("Project",    "Technology"),
 }
 
-# Neo4j 노드에서 표시명으로 쓸 속성 우선순위 (Paper/Patent/Project은 title, 나머지는 name)
-_NAME_EXPR = "COALESCE(n2.name, n2.title, n2.id)"
+SCHEMA_HINT = """
+Neo4j 노드: Paper | Patent | Researcher | Technology | Project | Organization
 
-# WHERE IN 절에 넣을 최대 ID 수 (Cypher 쿼리 크기 제한)
+관계 타입 (run_graph_query Cypher 및 semantic_graph_search hops 모두 동일):
+  AUTHORED   (Researcher)-[:AUTHORED]->(Paper)
+  INVENTED   (Researcher)-[:INVENTED]->(Patent)
+  RESEARCHES (Researcher)-[:RESEARCHES]->(Technology)
+  WORKS_AT   (Researcher)-[:WORKS_AT]->(Organization)
+  CITES      (Paper)-[:CITES]->(Paper)
+  EMPLOYS    (Project)-[:EMPLOYS]->(Researcher)
+  USES       (Project)-[:USES]->(Technology)
+
+hops direction (semantic_graph_search):
+  direction="out" (기본): (현재노드)-[:REL]->(다음노드)
+  direction="in":         (현재노드)<-[:REL]-(다음노드)
+
+예시:
+  Technology→Researcher: {"relation":"RESEARCHES","direction":"in","target_type":"Researcher"}
+  Paper→Researcher:      {"relation":"AUTHORED","direction":"in","target_type":"Researcher"}
+  Project→Researcher:    {"relation":"EMPLOYS","direction":"out","target_type":"Researcher"}
+  Technology→Project:    {"relation":"USES","direction":"in","target_type":"Project"}
+  Paper→인용Paper:        {"relation":"CITES","direction":"out","target_type":"Paper"}
+"""
+
+# WHERE IN 절에 넣을 최대 ID 수
 _MAX_IDS = 200
-
-
-def resolve_relation(relation: str) -> tuple[str, str]:
-    """
-    추상 관계명 → (Neo4j 관계 타입, 방향).
-    알 수 없는 관계명은 대문자 변환 + outbound fallback.
-    """
-    key = relation.lower().replace(" ", "_")
-    if key in _RELATION_MAP:
-        return _RELATION_MAP[key]
-    logger.warning("[Compiler] 알 수 없는 relation '%s' → fallback: %s out", relation, relation.upper())
-    return relation.upper(), "out"
+# 노드 표시명 우선순위 (Paper/Patent/Project은 title, 나머지는 name)
+_NAME_EXPR = "COALESCE(n2.name, n2.title, n2.id)"
 
 
 def compile_hop(
-    from_type: str,
-    relation: str,
-    to_type: str,
     start_ids: list[str],
+    relation: str,
+    direction: str,
+    target_type: str,
+    from_type: str = "",
     limit: int = 100,
     exclude_ids: Optional[list[str]] = None,
 ) -> str:
     """
-    단일 홉 READ-ONLY Cypher 생성.
+    단일 홉 READ-ONLY Cypher 쿼리 문자열 반환 (실행은 호출자가 담당).
+
+    Args:
+        start_ids:   시작 노드 ID 목록
+        relation:    Neo4j 관계 타입 (예: "AUTHORED", "EMPLOYS")
+        direction:   "out" = (start)-[:REL]->(target), "in" = (start)<-[:REL]-(target)
+        target_type: 도착 노드 레이블 (예: "Researcher")
+        from_type:   시작 노드 레이블 (선택, 인덱스 효율화용)
+        limit:       반환 행 최대 수
+        exclude_ids: 결과에서 제외할 ID 목록
 
     Returns:
-        MATCH 패턴 WHERE n1.id IN [...] RETURN id, name, start_id LIMIT {limit}
+        MATCH ... WHERE ... RETURN id, name, start_id LIMIT n 형태의 Cypher 문자열
     """
-    rel_type, direction = resolve_relation(relation)
+    rel = relation.upper()
+    if rel not in _NEO4J_RELATIONS:
+        valid = ", ".join(sorted(_NEO4J_RELATIONS))
+        raise ValueError(f"알 수 없는 관계 타입: '{rel}'. 유효: {valid}")
 
     ids_literal = "[" + ", ".join(f'"{i}"' for i in start_ids[:_MAX_IDS]) + "]"
 
@@ -82,12 +86,11 @@ def compile_hop(
         ex_literal = "[" + ", ".join(f'"{i}"' for i in exclude_ids[:_MAX_IDS]) + "]"
         exclude_clause = f" AND NOT n2.id IN {ex_literal}"
 
+    n1_label = f":{from_type}" if from_type else ""
     if direction == "out":
-        pattern = f"(n1:{from_type})-[:{rel_type}]->(n2:{to_type})"
-    elif direction == "in":
-        pattern = f"(n1:{from_type})<-[:{rel_type}]-(n2:{to_type})"
+        pattern = f"(n1{n1_label})-[:{rel}]->(n2:{target_type})"
     else:
-        pattern = f"(n1:{from_type})-[:{rel_type}]-(n2:{to_type})"
+        pattern = f"(n1{n1_label})<-[:{rel}]-(n2:{target_type})"
 
     return (
         f"MATCH {pattern} "
@@ -95,8 +98,3 @@ def compile_hop(
         f"RETURN n2.id AS id, {_NAME_EXPR} AS name, n1.id AS start_id "
         f"LIMIT {limit}"
     )
-
-
-def get_relation_schema() -> dict[str, tuple[str, str]]:
-    """LLM 프롬프트용 — 사용 가능한 관계 목록 반환."""
-    return dict(_RELATION_MAP)

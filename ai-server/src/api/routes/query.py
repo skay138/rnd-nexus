@@ -71,8 +71,7 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
         max_iterations = body.config.max_iterations  if body.config else None,
         temperature    = body.config.temperature     if body.config else None,
         semantic_top_k = body.config.semantic_top_k  if body.config else None,
-        dense_weight   = body.config.dense_weight    if body.config else None,
-        sparse_weight  = body.config.sparse_weight   if body.config else None,
+        keyword_weight = body.config.keyword_weight  if body.config else None,
     )
     resolved = RequestConfig._resolve(config_repo, override)
     RequestConfig.set_current(resolved, original_query=body.query)

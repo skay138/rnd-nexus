@@ -18,14 +18,16 @@ logging.getLogger("mcp_server").setLevel(settings.rnd_log_level.upper())
 from mcp_server.tools.entities import register_entity_tools
 from mcp_server.tools.vector import register_vector_tools
 from mcp_server.tools.graph import register_graph_tools
-from mcp_server.tools.graph_search import register_graph_search_tools
+from mcp_server.tools.vector_graph import register_vector_graph_tools
+from mcp_server.tools.filter import register_filter_tools
 
 mcp = FastMCP("RndNexusServer", host="0.0.0.0", port=8000)
 
 register_vector_tools(mcp)        # semantic_search
-register_graph_search_tools(mcp)  # semantic_graph_search
+register_vector_graph_tools(mcp)  # semantic_graph_search
 register_entity_tools(mcp)        # get_entities (ID 기반 상세 조회)
 register_graph_tools(mcp)         # get_researcher_network, get_citation_graph, run_graph_query
+register_filter_tools(mcp)        # search_by_filter (연도·기관·상태 필터)
 
 
 _FIXTURE_META = [

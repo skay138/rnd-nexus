@@ -201,8 +201,7 @@ const SCHEMA = [
     title: '🔍 검색 설정',
     fields: [
       { key: 'semantic_top_k', label: 'Semantic Top-K', type: 'number', hint: 'Milvus 검색 반환 결과 수 (기본: 20)', min: 1, max: 100 },
-      { key: 'dense_weight',   label: 'Dense 가중치',   type: 'number', hint: '의미 유사도 가중치 (기본: 0.3)', step: '0.1', min: 0, max: 1 },
-      { key: 'sparse_weight',  label: 'Sparse 가중치',  type: 'number', hint: 'BM25 키워드 가중치 (기본: 0.7)', step: '0.1', min: 0, max: 1 },
+      { key: 'keyword_weight', label: 'Keyword 가중치', type: 'number', hint: 'BM25 키워드 가중치 (0=의미 중심, 1=키워드 중심, 기본: 0.5)', step: '0.1', min: 0, max: 1 },
     ],
   },
 ];
