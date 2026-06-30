@@ -150,6 +150,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     reasoning = ""
     out_of_scope = False
     for attempt in range(_MAX_RETRIES + 1):
+        raw = ""
         try:
             raw = await llm_ainvoke(llm, invoke_msgs)
             plan = OrchestratorPlan.model_validate_json(raw)
@@ -159,9 +160,9 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
             break
         except Exception as e:
             if attempt < _MAX_RETRIES:
-                logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s", attempt + 1, _MAX_RETRIES, e)
+                logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s\n[Raw Output]: %s", attempt + 1, _MAX_RETRIES, e, raw)
             else:
-                logger.error("[orchestrator] structured output 최종 실패: %s", e)
+                logger.error("[orchestrator] structured output 최종 실패: %s\n[Raw Output]: %s", e, raw)
                 reasoning = f"계획 수립 실패 ({type(e).__name__}) — 현재까지 수집된 데이터로 답변합니다."
     elapsed = time.perf_counter() - t0
 
