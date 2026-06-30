@@ -141,6 +141,8 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     today = datetime.date.today().strftime("%Y년 %m월 %d일")
     date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
     invoke_msgs = [SystemMessage(content=system_prompt), date_msg] + relevant_msgs
+    # 컨텍스트가 길어질 경우 JSON 출력 지시를 잊지 않도록 마지막에 리마인더 추가
+    invoke_msgs.append(HumanMessage(content="반드시 시스템 프롬프트에 지정된 JSON 형식으로만 답변하세요. 마크다운(```json)이나 다른 설명 텍스트 없이 순수 JSON만 출력하세요."))
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model, json_mode=True)
 

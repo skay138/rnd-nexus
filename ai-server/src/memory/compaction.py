@@ -4,7 +4,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-COMPACTION_THRESHOLD = 80_000
+COMPACTION_THRESHOLD = 24_000
 
 
 def should_compact(messages: list[Any], token_count: int) -> bool:
