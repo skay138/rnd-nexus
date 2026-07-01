@@ -106,11 +106,15 @@ Each worker reads the task description and autonomously selects the appropriate 
 </constraints>
 
 <output_format>
-Respond ONLY with valid JSON in the exact format below. No other text, no markdown.
-Need data:    {{"tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
-Done:         {{"tasks": [], "out_of_scope": false}}
-Out of scope: {{"tasks": [], "out_of_scope": true}}
-Term/concept: {{"tasks": [], "out_of_scope": false}}
+Output ONLY a JSON object with EXACTLY these two keys — no other keys allowed:
+  "tasks": array of strings (Korean task descriptions, or [] when done)
+  "out_of_scope": boolean
+
+Examples:
+  Need data:    {{"tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
+  Done:         {{"tasks": [], "out_of_scope": false}}
+  Out of scope: {{"tasks": [], "out_of_scope": true}}
+  Term/concept: {{"tasks": [], "out_of_scope": false}}
 </output_format>"""
 
     messages = list(state["messages"])
@@ -139,10 +143,11 @@ Term/concept: {{"tasks": [], "out_of_scope": false}}
     t0 = time.perf_counter()
     tasks: list[str] = []
     out_of_scope = False
+    retry_msgs = list(invoke_msgs)
     for attempt in range(_MAX_RETRIES + 1):
         raw = ""
         try:
-            raw = await llm_ainvoke(llm, invoke_msgs)
+            raw = await llm_ainvoke(llm, retry_msgs)
             plan = OrchestratorPlan.model_validate_json(raw)
             tasks = _merge_dependent_tasks(plan.tasks)
             out_of_scope = plan.out_of_scope
@@ -150,6 +155,10 @@ Term/concept: {{"tasks": [], "out_of_scope": false}}
         except Exception as e:
             if attempt < _MAX_RETRIES:
                 logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s\n[Raw Output]: %s", attempt + 1, _MAX_RETRIES, e, raw)
+                retry_msgs = list(invoke_msgs) + [
+                    AIMessage(content=raw),
+                    HumanMessage(content=f'Invalid output. Required: {{"tasks": [...], "out_of_scope": bool}} — exactly these two keys only. Retry.'),
+                ]
             else:
                 logger.error("[orchestrator] structured output 최종 실패: %s\n[Raw Output]: %s", e, raw)
     elapsed = time.perf_counter() - t0

@@ -14,8 +14,8 @@ def should_compact(messages: list[Any], token_count: int) -> bool:
 async def compact_messages(messages: list[Any], llm: Any) -> list[Any]:
     """메시지 압축 전략:
 
-    1. final_answer 경계가 있으면 → 완성된 이전 턴을 핵심 사실 요약으로 압축
-    2. 단일 턴 진행 중 → 완료된 라운드(tool_results 마커 이전)를 압축, 현재 라운드 보존
+    1. final_answer 경계가 있으면 → 완성된 이전 턴을 요약, 현재 턴(이후 메시지)은 raw 보존
+    2. 단일 턴 진행 중 → 전체를 요약 (to_keep 없음)
     """
     final_answer_indices = [
         i for i, m in enumerate(messages)
@@ -23,25 +23,14 @@ async def compact_messages(messages: list[Any], llm: Any) -> list[Any]:
     ]
 
     if final_answer_indices:
-        # 멀티턴: 마지막 final_answer까지를 압축, 이후(현재 턴)는 그대로 보존
-        cut = final_answer_indices[-1] + 1
+        # 멀티턴: 마지막 final_answer까지 압축, 이후(현재 턴)는 raw 보존
+        cut         = final_answer_indices[-1] + 1
         to_compress = messages[:cut]
         to_keep     = messages[cut:]
     else:
-        # 단일 턴 내 압축: 완료된 라운드(tool_results 마커 뒤까지)를 압축
-        tool_result_markers = [
-            i for i, m in enumerate(messages)
-            if getattr(m, "name", None) == "tool_results"
-        ]
-        if len(tool_result_markers) > 1:
-            # 마지막 라운드 직전까지 압축, 마지막 라운드 보존
-            cut         = tool_result_markers[-1]
-            to_compress = messages[:cut]
-            to_keep     = messages[cut:]
-        else:
-            keep_count  = min(8, max(2, len(messages) - 2))
-            to_compress = messages[:-keep_count]
-            to_keep     = messages[-keep_count:]
+        # 단일 턴: 전체 압축 — 요약 LLM이 핵심 사실(ID·엔티티명) 보존
+        to_compress = messages
+        to_keep     = []
 
     if not to_compress:
         return messages
@@ -52,31 +41,35 @@ async def compact_messages(messages: list[Any], llm: Any) -> list[Any]:
 
 async def _compress_to_summary(messages: list[Any], llm: Any) -> str:
     formatted = _format_for_compact(messages)
-    prompt = f"""<role>
-R&D 에이전트 대화를 핵심 내용만 추출해 압축하세요.
-</role>
+    prompt = f"""Summarize the following R&D agent session into a structured handoff document.
+The summary replaces the full conversation history — the agent must be able to continue work from it alone.
+Write in Korean. Be specific: include exact IDs and names, not just counts.
 
-<instructions>
-반드시 보존:
-- 사용자 원래 질문
-- 수집된 엔티티: 연구자명·소속·논문/특허 제목·기술명·과제명 (ID 포함)
-- 완료된 태스크 목록
-- 도출된 최종 답변 (있을 경우)
+Output the following sections (omit a section if not applicable):
 
-제거:
-- 중간 추론 과정
-- 도구 호출 raw JSON (핵심 사실만 추출)
-- 중복 데이터
-</instructions>
+## 원본 질문
+<사용자가 요청한 내용 그대로>
 
-<output_format>
-평문 한국어로 작성하세요. 불릿 목록보다 서술 문장 형태를 선호합니다.
-</output_format>
+## 수집된 데이터
+<수집된 엔티티를 ID와 함께 나열>
+- 연구자: 이름 (ID, 소속, 전문분야)
+- 논문: 제목 (ID, 연도)
+- 특허: 제목 (ID, 연도)
+- 과제: 과제명 (ID, 기관)
+- 기술: 기술명 (ID)
+
+## 완료된 태스크
+<어떤 검색·조회가 수행됐는지>
+
+## 최종 답변 요약
+<final_answer가 있었다면 핵심 내용>
+
+## 미완료 사항
+<아직 수집되지 않은 데이터나 남은 작업 — 해당 없으면 생략>
 
 <conversation>
 {formatted}
-</conversation>
-"""
+</conversation>"""
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     return response.content
 
@@ -102,10 +95,7 @@ def _format_for_compact(messages: list[Any]) -> str:
             lines.append("[라운드 수집 완료]")
 
         elif name == "orchestrator":
-            content = str(m.content)
-            task_part = content.split("\n\n[계획한 태스크]", 1)
-            tasks_text = task_part[1].strip()[:300] if len(task_part) > 1 else content[:300]
-            lines.append(f"[오케스트레이터 태스크]\n{tasks_text}")
+            lines.append(f"[오케스트레이터 태스크]\n{str(m.content)[:300]}")
 
         elif name == "final_answer":
             lines.append(f"[최종 답변]\n{str(m.content)[:500]}")
