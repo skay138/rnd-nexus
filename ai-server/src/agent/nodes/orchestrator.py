@@ -27,26 +27,26 @@ _DEPENDENCY_SIGNALS = (
 
 _STRATEGY = """
 <instructions>
-- 서로 독립적인 태스크는 같은 라운드에 묶어 병렬 실행하세요.
-- 어떤 태스크의 결과(ID, 식별자 등)가 다음 태스크의 입력으로 필요하면 절대 분리하지 말고 하나의 태스크로 합치세요. 워커는 태스크 내부에서 순차 작업을 자율 처리합니다.
-- 태스크 설명에 "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" 같은 표현이 들어 있으면 이전 태스크 결과에 의존한다는 신호입니다 — 반드시 앞 태스크와 하나로 합쳐야 합니다.
-- 동일한 사용자 입력(이름, 키워드)만 사용하는 태스크는 독립이므로 병렬 실행하세요.
-- 이전 도구 호출 결과를 보고 충분한 데이터가 수집됐으면 tasks=[]로 종료하고, 부족하면 다른 관점·키워드로 추가 태스크를 계획하세요.
-- 각 태스크에는 사용자 질문의 핵심 키워드(이름, ID 등)를 반드시 포함하세요.
-- 이미 수집된 ID·식별자가 있으면 태스크 설명에 직접 명시하세요.
-- 원본 질문 범위를 벗어난 새로운 도메인이나 주제로 확장하지 마세요.
+- Bundle independent tasks in the same round for parallel execution.
+- If one task's output (IDs, identifiers) is required as input for the next, never split them — merge into a single task. Workers handle sequential steps autonomously within a task.
+- If a task description contains "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" (dependency signals in Korean), it depends on a prior task's results — merge it with the preceding task.
+- Tasks that use only the same user-supplied input (name, keyword) are independent and can run in parallel.
+- If previous tool results show sufficient data, return tasks=[] to finish; otherwise plan additional tasks from a different angle, keyword, or scope.
+- Each task must include the core keywords from the user's question (names, IDs, etc.).
+- If IDs or identifiers have already been collected, include them directly in the task description.
+- Do not expand into new domains or topics beyond the scope of the original question.
 </instructions>
 
 <examples>
-✗ 잘못된 분리 ("검색된"이 의존성 신호 — 앞 태스크 결과 없이 실행 불가):
+✗ Wrong — split with dependency signal ("검색된" cannot run without prior result):
 ["PIM 기술로 과제를 검색하세요", "검색된 PIM 과제와 연결된 주요 기관을 조회하세요"]
 ["홍길동 연구자를 검색하세요", "검색된 ID로 상세 정보를 조회하세요"]
 
-✓ 올바른 예시 1 — 의존 순서가 있으면 하나의 태스크로:
+✓ Correct 1 — sequential dependency → single task:
 ["PIM 기술로 과제를 검색하고, 검색된 과제와 연결된 주요 기관을 조회하여 기관별 현황을 비교하세요."]
 ["홍길동 연구자의 상세 프로필을 조사하세요. 필요하면 검색하여 ID를 찾고 상세 정보를 조회하세요."]
 
-✓ 올바른 예시 2 — 동일 입력이므로 병렬 실행:
+✓ Correct 2 — same input → parallel:
 ["홍길동 연구자의 논문을 조사하세요", "홍길동 연구자의 특허를 조사하세요", "홍길동 연구자의 연구과제를 조사하세요"]
 </examples>
 """
@@ -89,10 +89,10 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     iteration_count: int = state.get("iteration_count", 0)
 
     system_prompt = f"""<role>
-당신은 R&D 데이터 수집 오케스트레이터입니다. 답변은 한국어로 작성하세요.
-사용자 질문에 완전히 답하기 위해 필요한 데이터를 수집하고, 완료되면 tasks=[]를 반환하세요.
-태스크를 기술하고 워커에게 위임합니다 — 도구를 직접 지정하지 마세요.
-각 워커는 태스크 설명을 보고 스스로 적합한 도구를 선택해 실행합니다.
+You are an R&D data collection orchestrator. Write task descriptions in Korean.
+Collect the data needed to fully answer the user's question, then return tasks=[] when done.
+Describe tasks and delegate to workers — do not specify tool names or parameters.
+Each worker reads the task description and autonomously selects the appropriate tools.
 </role>
 
 {_build_capabilities(tools_by_name)}
@@ -100,17 +100,17 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
 {_STRATEGY}
 
 <constraints>
-- 현재 라운드: {iteration_count + 1} / {max_iterations}
-{"- 마지막 수집 라운드입니다. 이번 라운드 후 바로 답변 생성 단계로 전환됩니다." if iteration_count + 1 >= max_iterations else "- 추가 데이터가 필요하면 다른 관점·키워드·범위로 접근하는 새로운 태스크를 계획하세요."}
-- 각 태스크 설명은 워커가 독립적으로 이해할 수 있을 만큼 구체적으로 작성하세요.
+- Current round: {iteration_count + 1} / {max_iterations}
+{"- This is the final collection round. Answer generation begins immediately after." if iteration_count + 1 >= max_iterations else "- If more data is needed, plan new tasks from a different angle, keyword, or scope."}
+- Each task description must be specific enough for a worker to execute independently.
 </constraints>
 
 <output_format>
-반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트는 절대 포함하지 마세요.
-데이터 수집 필요: {{"tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
-수집 완료:       {{"tasks": [], "out_of_scope": false}}
-범위 외 질문:    {{"tasks": [], "out_of_scope": true}}
-용어·개념 설명:  {{"tasks": [], "out_of_scope": false}}
+Respond ONLY with valid JSON in the exact format below. No other text, no markdown.
+Need data:    {{"tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
+Done:         {{"tasks": [], "out_of_scope": false}}
+Out of scope: {{"tasks": [], "out_of_scope": true}}
+Term/concept: {{"tasks": [], "out_of_scope": false}}
 </output_format>"""
 
     messages = list(state["messages"])
@@ -131,7 +131,7 @@ async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
     date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
     invoke_msgs = [SystemMessage(content=system_prompt), date_msg] + relevant_msgs
     # 컨텍스트가 길어질 경우 JSON 출력 지시를 잊지 않도록 마지막에 리마인더 추가
-    invoke_msgs.append(HumanMessage(content="반드시 시스템 프롬프트에 지정된 JSON 형식으로만 답변하세요. 마크다운(```json)이나 다른 설명 텍스트 없이 순수 JSON만 출력하세요."))
+    invoke_msgs.append(HumanMessage(content="Output ONLY valid JSON as specified. No markdown (```json), no explanation — pure JSON only."))
 
     llm = get_llm(model=RequestConfig.current().orchestrator_model or settings.rnd_model, json_mode=True)
 

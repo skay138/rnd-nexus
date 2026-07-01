@@ -41,10 +41,10 @@ def _build_history_summary(task_execution_results: list[dict]) -> str:
 
     lines: list[str] = []
     if completed:
-        lines.append("[이전 라운드 완료된 태스크]")
+        lines.append("[Completed tasks from previous rounds]")
         lines.extend(completed[:20])
     if empty_tools:
-        lines.append("[이전 라운드에서 결과 없었던 검색 — 같은 방식 반복 금지]")
+        lines.append("[Searches with no results in previous rounds — do not repeat]")
         lines.extend(f"- {e}" for e in empty_tools[:10])
 
     return "\n".join(lines) if lines else ""
@@ -73,14 +73,14 @@ async def _run_worker(
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
     system = SystemMessage(content="""<role>
-당신은 R&D 데이터 수집 워커입니다. 도구 호출만 수행하세요 — 분석·요약·설명은 하지 않습니다.
+You are an R&D data collection worker. Execute tool calls only — do not analyze, summarize, or explain.
 </role>
 
 <instructions>
-- [태스크]가 최우선입니다. [원본 질문]은 태스크에 키워드가 생략되거나 지시대명사가 있을 때만 보충 참고하세요.
-- 검색으로 ID를 확보한 경우 상세 조회 도구를 추가로 호출해 소속·전문분야·초록 등 상세 정보를 수집하라.
-- 충분한 데이터를 수집했거나 더 이상 조회할 내용이 없으면 종료하세요.
-- [이전 라운드 완료된 태스크]가 제공된 경우 동일한 검색을 반복하지 마라.
+- [태스크] is the top priority. Use [원본 질문] only as supplementary context when keywords are missing or pronouns are used.
+- After obtaining IDs from a search, call detail-retrieval tools to collect affiliation, specialty, abstract, and other detailed fields.
+- Stop when sufficient data is collected or there is nothing more to retrieve.
+- If [Completed tasks from previous rounds] is provided, do not repeat the same searches.
 </instructions>""")
 
     task_content = (
