@@ -69,6 +69,7 @@ Do not add background information, related topics, or additional entities.
 - Do not include citations, references, or source lists.
 - Do not append generic closing sections such as "참고 사항", "추가 정보", "주의", or "수집 범위 외".
 - Do not add generic concluding sentences that summarize the field or introduce additional entities (e.g. "이 외에도 X, Y, Z가 관련 분야에 참여하고 있습니다" is forbidden).
+- Do not explain what was excluded or why. Simply omit irrelevant results without comment.
 </constraints>
 """
 

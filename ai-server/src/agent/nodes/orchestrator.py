@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import logging
+import re
 import time
 from pydantic import BaseModel, Field
 from typing import Any
@@ -69,6 +70,12 @@ def _merge_dependent_tasks(tasks: list[str]) -> list[str]:
 def _make_task_id(description: str) -> str:
     """태스크 설명의 SHA1 앞 8자 — 중복 차단 및 결과 추적용."""
     return hashlib.sha1(description.strip().lower().encode()).hexdigest()[:8]
+
+
+def _strip_code_fence(s: str) -> str:
+    s = s.strip()
+    m = re.match(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", s, re.DOTALL)
+    return m.group(1).strip() if m else s
 
 
 def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
@@ -148,7 +155,7 @@ Examples:
         raw = ""
         try:
             raw = await llm_ainvoke(llm, retry_msgs)
-            plan = OrchestratorPlan.model_validate_json(raw)
+            plan = OrchestratorPlan.model_validate_json(_strip_code_fence(raw))
             tasks = _merge_dependent_tasks(plan.tasks)
             out_of_scope = plan.out_of_scope
             break
