@@ -3,8 +3,8 @@ import logging
 import time
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from common.llm import get_llm, llm_ainvoke
-from common.parsers import collect_relevant_data
+from common.llm import get_llm
+from common.parsers import collect_relevant_data, strip_think
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState
 from agent.utils.context import split_turns, previous_turn_context
@@ -106,11 +106,11 @@ Do not add background information, related topics, or additional entities.
         "[GEN] context=%d msgs (history=%d)  data=%d chars",
         len(relevant), len(history), len(data_block),
     )
-
     t0 = time.perf_counter()
-    full_content = await llm_ainvoke(llm, [SystemMessage(content=system_prompt)] + relevant, config)
-    if not full_content:
-        full_content = "관련 정보를 찾을 수 없습니다."
+    chunks: list[str] = []
+    async for chunk in llm.astream([SystemMessage(content=system_prompt)] + relevant, config):
+        chunks.append(chunk.content if isinstance(chunk.content, str) else "")
+    full_content = strip_think("".join(chunks))
     elapsed = time.perf_counter() - t0
 
     logger.debug("[GEN] %.2fs  output=%d chars\n  out | %s", elapsed, len(full_content), full_content[:300])

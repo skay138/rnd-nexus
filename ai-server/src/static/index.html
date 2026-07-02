@@ -110,7 +110,42 @@
     }
 
     /* ── Markdown ────────────────────────────────────────────────── */
-    sup.cite { color: #a78bfa; font-size: .72em; margin-left: 1px; white-space: nowrap; }
+    sup.cite {
+      color: #a78bfa;
+      font-size: .72em;
+      margin-left: 1px;
+      white-space: nowrap;
+      cursor: default;
+      position: relative;
+    }
+    sup.cite .cite-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 5px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1d2e;
+      border: 1px solid #2d3158;
+      border-radius: 6px;
+      padding: 0.35rem 0.65rem;
+      white-space: nowrap;
+      z-index: 9999;
+      pointer-events: none;
+      font-size: 0.78rem;
+      font-weight: normal;
+      line-height: 1.5;
+      box-shadow: 0 4px 16px #00000055;
+    }
+    sup.cite .cite-tooltip .tt-type {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.65;
+      margin-bottom: 0.1rem;
+    }
+    sup.cite .cite-tooltip .tt-title { color: #e2e8f0; }
+    sup.cite:hover .cite-tooltip { display: block; }
     .msg-body h1 { color: #f0f4ff; font-size: 1.4rem;  font-weight: 700; margin: 1.2rem 0 0.4rem; }
     .msg-body h2 { color: #f0f4ff; font-size: 1.18rem; font-weight: 700; margin: 1.1rem 0 0.35rem; border-bottom: 1px solid #1e2235; padding-bottom: 0.2rem; }
     .msg-body h3 { color: #f0f4ff; font-size: 1.05rem; font-weight: 600; margin: 1rem 0 0.3rem; }
@@ -761,19 +796,37 @@
 
     // [#ID] 인용 마커 → 번호 첨자. 스트리밍 중엔 등장 순 임시 번호,
     // done 이후엔 서버 references 번호(citeOverride)로 동기화 — 검증 안 된 ID 마커는 제거
+    // citeOverride: { id: {num, title, type} }
     var citeOverride = null;
+    var TYPE_COLORS = {
+      Paper: "#60a5fa", Patent: "#fb923c", Researcher: "#4ade80",
+      Technology: "#a78bfa", Project: "#facc15", Organization: "#94a3b8"
+    };
     function renderCitations(html, sourceText) {
       var map = citeOverride;
       if (!map) {
-        map = {};
+        // 스트리밍 중: 등장 순 임시 번호 (title/type 없음)
+        var numMap = {};
         var n = 0, m;
         var scan = /\[#([A-Za-z0-9\-_.]+)\]/g;
         while ((m = scan.exec(sourceText)) !== null) {
-          if (!(m[1] in map)) map[m[1]] = ++n;
+          if (!(m[1] in numMap)) numMap[m[1]] = ++n;
         }
+        return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
+          return numMap[id] ? '<sup class="cite">[' + numMap[id] + ']</sup>' : "";
+        });
       }
       return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
-        return map[id] ? '<sup class="cite" title="' + id + '">[' + map[id] + ']</sup>' : "";
+        var entry = map[id];
+        if (!entry) return "";
+        var typeColor = TYPE_COLORS[entry.type] || "#a78bfa";
+        var tooltipHtml = entry.title
+          ? '<span class="cite-tooltip">'
+            + '<div class="tt-type" style="color:' + typeColor + '">' + escHtml(entry.type || "") + '</div>'
+            + '<div class="tt-title">' + escHtml(entry.title.substring(0, 60) + (entry.title.length > 60 ? "…" : "")) + '</div>'
+            + '</span>'
+          : '';
+        return '<sup class="cite">[' + entry.num + ']' + tooltipHtml + '</sup>';
       });
     }
 
@@ -967,7 +1020,9 @@
                 citeOverride = null;
                 if (ev.references && ev.references.length > 0) {
                   citeOverride = {};
-                  ev.references.forEach(function(r) { citeOverride[r.id] = r.num; });
+                  ev.references.forEach(function(r) {
+                    citeOverride[r.id] = { num: r.num, title: r.title || "", type: r.type || "" };
+                  });
                 }
                 answerBody.innerHTML = renderMarkdown(text) || "(응답 없음)";
                 if (ev.references && ev.references.length > 0) {
