@@ -3,44 +3,37 @@
     "paper_id": "P001",
     "id": "P001",
     "title": "A Survey on Neuromorphic Computing for AI Semiconductor",
-    "authors": [
-      "김정호",
-      "박성민",
-      "이하준"
-    ],
     "year": 2024,
     "citations": 312,
     "journal": "IEEE Transactions on Neural Networks",
     "keywords": "neuromorphic computing AI semiconductor design methodology",
     "abstract": "뉴로모픽 컴퓨팅 기반 AI 반도체의 최신 동향 및 설계 방법론 정리.",
     "text": "A Survey on Neuromorphic Computing for AI Semiconductor. 뉴로모픽 컴퓨팅 기반 AI 반도체의 최신 동향 및 설계 방법론 정리. neuromorphic computing AI semiconductor design methodology",
-    "cites": []
+    "cites": [],
+    "author_ids": [
+      "R001"
+    ]
   },
   {
     "paper_id": "P002",
     "id": "P002",
     "title": "HBM3E Memory Architecture for Large-Scale AI Accelerators",
-    "authors": [
-      "박민준",
-      "정태양"
-    ],
     "year": 2024,
     "citations": 187,
     "journal": "ISSCC",
     "keywords": "HBM3E memory bandwidth AI accelerator power efficiency",
     "abstract": "HBM3E의 대역폭·전력 효율 개선 방법론 및 AI 추론 가속기 통합 사례.",
     "text": "HBM3E Memory Architecture for Large-Scale AI Accelerators. HBM3E의 대역폭·전력 효율 개선 방법론 및 AI 추론 가속기 통합 사례. HBM3E memory bandwidth AI accelerator power efficiency",
-    "cites": []
+    "cites": [],
+    "author_ids": [
+      "R003",
+      "R005"
+    ]
   },
   {
     "paper_id": "P003",
     "id": "P003",
     "title": "PIM-based NPU Design for On-device AI Inference",
-    "authors": [
-      "박민준",
-      "한기동",
-      "오지훈"
-    ],
     "year": 2023,
     "citations": 445,
     "journal": "ACM ISCA",
@@ -49,16 +42,15 @@
     "text": "PIM-based NPU Design for On-device AI Inference. Processing-In-Memory 기반 NPU로 온디바이스 AI 추론 지연 및 전력 절감. PIM processing-in-memory NPU on-device AI inference power",
     "cites": [
       "P001"
+    ],
+    "author_ids": [
+      "R003"
     ]
   },
   {
     "paper_id": "P004",
     "id": "P004",
     "title": "3D-IC Integration for Next-Generation AI Chips",
-    "authors": [
-      "최유리",
-      "윤보영"
-    ],
     "year": 2024,
     "citations": 203,
     "journal": "Nature Electronics",
@@ -67,17 +59,15 @@
     "text": "3D-IC Integration for Next-Generation AI Chips. 3D 집적 회로 기술을 활용한 AI 반도체 성능·면적 최적화. 3D-IC integration AI chip area optimization stacking",
     "cites": [
       "P002"
+    ],
+    "author_ids": [
+      "R004"
     ]
   },
   {
     "paper_id": "P005",
     "id": "P005",
     "title": "Analog In-Memory Computing for Energy-Efficient Deep Learning",
-    "authors": [
-      "한동현",
-      "김수민",
-      "류창민"
-    ],
     "year": 2023,
     "citations": 389,
     "journal": "Science Advances",
@@ -86,33 +76,30 @@
     "text": "Analog In-Memory Computing for Energy-Efficient Deep Learning. 아날로그 인메모리 컴퓨팅으로 딥러닝 에너지 소비 97% 절감 달성. analog in-memory computing deep learning energy efficiency RRAM",
     "cites": [
       "P001"
+    ],
+    "author_ids": [
+      "R007"
     ]
   },
   {
     "paper_id": "P006",
     "id": "P006",
     "title": "RISC-V Based Open-Source AI Processor Design",
-    "authors": [
-      "신예린",
-      "임수진"
-    ],
     "year": 2024,
     "citations": 98,
     "journal": "IEEE Micro",
     "keywords": "RISC-V open-source AI processor design verification",
     "abstract": "RISC-V 기반 오픈소스 AI 프로세서 설계 및 검증 방법론.",
     "text": "RISC-V Based Open-Source AI Processor Design. RISC-V 기반 오픈소스 AI 프로세서 설계 및 검증 방법론. RISC-V open-source AI processor design verification",
-    "cites": []
+    "cites": [],
+    "author_ids": [
+      "R009"
+    ]
   },
   {
     "paper_id": "P007",
     "id": "P007",
     "title": "Chiplet Architecture for Heterogeneous AI Computing",
-    "authors": [
-      "문세준",
-      "신민수",
-      "안재현"
-    ],
     "year": 2023,
     "citations": 521,
     "journal": "ACM ASPLOS",
@@ -121,32 +108,30 @@
     "text": "Chiplet Architecture for Heterogeneous AI Computing. 칩릿 아키텍처를 활용한 이종 AI 컴퓨팅 통합 및 인터커넥트 최적화. chiplet heterogeneous AI computing interconnect integration",
     "cites": [
       "P004"
+    ],
+    "author_ids": [
+      "R010"
     ]
   },
   {
     "paper_id": "P008",
     "id": "P008",
     "title": "Quantum-Classical Hybrid Accelerator for AI Workloads",
-    "authors": [
-      "한동현",
-      "조현우"
-    ],
     "year": 2024,
     "citations": 76,
     "journal": "npj Quantum Information",
     "keywords": "quantum classical hybrid accelerator AI optimization speed",
     "abstract": "양자-클래식 하이브리드 가속기를 통한 AI 최적화 문제 해결 속도 향상.",
     "text": "Quantum-Classical Hybrid Accelerator for AI Workloads. 양자-클래식 하이브리드 가속기를 통한 AI 최적화 문제 해결 속도 향상. quantum classical hybrid accelerator AI optimization speed",
-    "cites": []
+    "cites": [],
+    "author_ids": [
+      "R007"
+    ]
   },
   {
     "paper_id": "P009",
     "id": "P009",
     "title": "Sparse Tensor Core Design for Efficient Transformer Inference",
-    "authors": [
-      "이수진",
-      "강지원"
-    ],
     "year": 2023,
     "citations": 634,
     "journal": "MICRO",
@@ -156,33 +141,31 @@
     "cites": [
       "P003",
       "P007"
+    ],
+    "author_ids": [
+      "R002",
+      "R008"
     ]
   },
   {
     "paper_id": "P010",
     "id": "P010",
     "title": "Near-Sensor AI Processing for Edge Intelligence",
-    "authors": [
-      "오하나",
-      "김동현"
-    ],
     "year": 2024,
     "citations": 142,
     "journal": "IEEE Sensors Journal",
     "keywords": "near-sensor AI processing edge intelligence real-time",
     "abstract": "센서 근방 AI 처리 아키텍처로 엣지 인텔리전스 실시간성 확보.",
     "text": "Near-Sensor AI Processing for Edge Intelligence. 센서 근방 AI 처리 아키텍처로 엣지 인텔리전스 실시간성 확보. near-sensor AI processing edge intelligence real-time",
-    "cites": []
+    "cites": [],
+    "author_ids": [
+      "R006"
+    ]
   },
   {
     "paper_id": "P011",
     "id": "P011",
     "title": "Large Language Model Inference Optimization on Edge NPU",
-    "authors": [
-      "이수진",
-      "강우진",
-      "최윤진"
-    ],
     "year": 2024,
     "citations": 215,
     "journal": "ACM MobiSys",
@@ -192,16 +175,15 @@
     "cites": [
       "P003",
       "P009"
+    ],
+    "author_ids": [
+      "R002"
     ]
   },
   {
     "paper_id": "P012",
     "id": "P012",
     "title": "CXL-Based Memory Pooling for AI Training Cluster",
-    "authors": [
-      "정태양",
-      "문성훈"
-    ],
     "year": 2023,
     "citations": 178,
     "journal": "USENIX OSDI",
@@ -210,6 +192,9 @@
     "text": "CXL-Based Memory Pooling for AI Training Cluster. CXL 메모리 풀링으로 AI 학습 클러스터의 메모리 활용률 2.4배 향상. CXL memory pooling AI training cluster bandwidth latency",
     "cites": [
       "P002"
+    ],
+    "author_ids": [
+      "R005"
     ]
   }
 ]

@@ -23,9 +23,9 @@ _DDL_STATEMENTS = [
 
     """CREATE TABLE IF NOT EXISTS paper_authors (
         paper_id     VARCHAR(64)  NOT NULL,
-        author_name  VARCHAR(255) NOT NULL,
+        author_id    VARCHAR(64)  NOT NULL,
         display_order INT         NOT NULL DEFAULT 0,
-        PRIMARY KEY (paper_id, author_name),
+        PRIMARY KEY (paper_id, author_id),
         INDEX idx_paper_id (paper_id),
         FOREIGN KEY (paper_id) REFERENCES papers(paper_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
@@ -180,11 +180,11 @@ def seed_from_fixtures(mariadb_url: str, fixtures_dir: str, clear: bool = False)
                     (p["paper_id"], p["title"], p.get("year"), p.get("citations", 0),
                      p.get("journal"), p.get("keywords"), p.get("abstract")),
                 )
-                for i, author in enumerate(p.get("authors", [])):
+                for i, author_id in enumerate(p.get("author_ids", [])):
                     cur.execute(
-                        "INSERT INTO paper_authors (paper_id, author_name, display_order) "
+                        "INSERT INTO paper_authors (paper_id, author_id, display_order) "
                         "VALUES (%s,%s,%s) ON DUPLICATE KEY UPDATE display_order=VALUES(display_order)",
-                        (p["paper_id"], author, i),
+                        (p["paper_id"], author_id, i),
                     )
 
             patents = json.loads((base / "patents.json").read_text(encoding="utf-8"))

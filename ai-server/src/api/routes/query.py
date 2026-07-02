@@ -70,9 +70,8 @@ def _is_cited(ref: dict, answer: str) -> bool:
     # 긴 제목은 앞부분 부분 매칭 허용 (모델이 제목을 축약해 인용하는 경우)
     return len(title) > 20 and title[:20] in answer
 
-
-_CITE_RE = re.compile(r"\[#([A-Za-z0-9\-_.]+)\]")
-
+# 마커 형식: [#ID], [ID], (ID) 모두 허용. 실제 유효성 검증은 by_id 필터링에서 수행됨
+_CITE_RE = re.compile(r"(?:\[#|\[|\()([A-Za-z0-9\-_.]+)(?:\]|\))")
 
 def _extract_all_refs(obj: Any) -> list[dict]:
     refs = []

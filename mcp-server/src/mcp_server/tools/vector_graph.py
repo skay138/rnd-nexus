@@ -55,6 +55,11 @@ def register_vector_graph_tools(mcp: FastMCP) -> None:
            hops=[{"relation":"EMPLOYS","direction":"in","target_type":"Project"}]
         </instructions>
 
+        <constraints>
+        - query에 엔티티 ID (예: 'P011', 'R002')를 입력하지 마세요.
+        - 이미 정확한 엔티티 ID를 알고 있다면, `run_graph_query` 도구를 사용하여 직접 매칭하세요 (예: MATCH (p:Paper {id: 'P011'})<-[:AUTHORED]-(r:Researcher) RETURN ...).
+        </constraints>
+
         Args:
             query:      시맨틱 검색 쿼리 (자연어. 예: "AI 반도체 저전력 설계")
             entry_type: 진입 노드 타입 (Paper / Patent / Technology / Researcher / Project / Organization)

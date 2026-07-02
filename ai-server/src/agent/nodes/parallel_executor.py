@@ -289,7 +289,11 @@ You are an R&D data collection worker. Collect the requested data by calling too
     if history_summary:
         task_content += f"\n\n{history_summary}"
 
-    messages: list = [system, HumanMessage(content=task_content)]
+    from datetime import date
+    today = date.today().strftime("%Y년 %m월 %d일")
+    date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
+    
+    messages: list = [system, date_msg, HumanMessage(content=task_content)]
     seen_calls: set[str] = set()
 
     try:

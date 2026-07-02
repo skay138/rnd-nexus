@@ -873,23 +873,29 @@
 
     function renderCitations(html, sourceText) {
       var map = citeOverride;
+      var citeRegex = /(?:\[#|\[|\()([A-Za-z0-9\-_.]+)(?:\]|\))/g;
+      
       if (!map) {
         // 스트리밍 중: 등장 순 임시 번호 (title/type 없음)
         var numMap = {};
         var n = 0, m;
-        var scan = /\[#([A-Za-z0-9\-_.]+)\]/g;
-        while ((m = scan.exec(sourceText)) !== null) {
+        while ((m = citeRegex.exec(sourceText)) !== null) {
           if (!(m[1] in numMap)) numMap[m[1]] = ++n;
         }
-        return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
-          if (!numMap[id]) return "";
+        
+        // 정규식 lastIndex 초기화 후 다시 매칭
+        citeRegex.lastIndex = 0;
+        return html.replace(citeRegex, function(match, id) {
+          if (!numMap[id]) return match;
           var escapedAttr = escHtml(id).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
           return '<sup class="cite" data-query-text="' + escapedAttr + '" onclick="appendQuery(this.dataset.queryText)">[' + numMap[id] + ']</sup>';
         });
       }
-      return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
+      
+      citeRegex.lastIndex = 0;
+      return html.replace(citeRegex, function(match, id) {
         var entry = map[id];
-        if (!entry) return "";
+        if (!entry) return match;
         var queryText = entry.title ? entry.title : id;
         var escapedAttr = escHtml(queryText).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
         var attrs = ' data-query-text="' + escapedAttr + '" onclick="appendQuery(this.dataset.queryText)"';
