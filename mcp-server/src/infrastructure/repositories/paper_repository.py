@@ -26,15 +26,16 @@ class MariaDBPaperRepository(PaperRepository):
             conditions.append("p.year <= %s")
             params.append(year_to)
         if author:
-            conditions.append("pa.author_name LIKE %s")
+            conditions.append("pa.author_id LIKE %s")
             params.append(f"%{author}%")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"""
             SELECT p.paper_id, p.title, p.year, p.citations, p.journal, p.abstract,
-                   GROUP_CONCAT(pa.author_id ORDER BY pa.display_order SEPARATOR ', ') AS authors
+                   GROUP_CONCAT(CONCAT(pa.author_id, ':', COALESCE(r.name, 'Unknown')) ORDER BY pa.display_order SEPARATOR ', ') AS authors
             FROM papers p
             LEFT JOIN paper_authors pa ON pa.paper_id = p.paper_id
+            LEFT JOIN researchers r ON r.researcher_id = pa.author_id
             {where}
             GROUP BY p.paper_id
             ORDER BY p.citations DESC
@@ -57,9 +58,10 @@ class MariaDBPaperRepository(PaperRepository):
         placeholders = ",".join(["%s"] * len(ids))
         sql = f"""
             SELECT p.paper_id, p.title, p.year, p.citations, p.journal, p.abstract, p.keywords,
-                   GROUP_CONCAT(pa.author_id ORDER BY pa.display_order SEPARATOR ', ') AS authors
+                   GROUP_CONCAT(CONCAT(pa.author_id, ':', COALESCE(r.name, 'Unknown')) ORDER BY pa.display_order SEPARATOR ', ') AS authors
             FROM papers p
             LEFT JOIN paper_authors pa ON pa.paper_id = p.paper_id
+            LEFT JOIN researchers r ON r.researcher_id = pa.author_id
             WHERE p.paper_id IN ({placeholders})
             GROUP BY p.paper_id
         """
@@ -75,10 +77,18 @@ class MariaDBPaperRepository(PaperRepository):
 class InMemoryPaperRepository(PaperRepository):
     def __init__(self, fixtures_dir: Optional[Path] = None) -> None:
         self.papers = load_fixture("papers.json", fixtures_dir)
+        self.researchers = load_fixture("researchers.json", fixtures_dir)
+        self.r_map = {r.get("id"): r.get("name", "Unknown") for r in self.researchers}
 
     def get_by_ids(self, ids: List[str]) -> List[Paper]:
         id_set = set(ids)
-        return [Paper(**p) for p in self.papers if p.get("paper_id") in id_set]
+        result = []
+        for p in self.papers:
+            if p.get("paper_id") in id_set:
+                p_copy = dict(p)
+                p_copy["authors"] = [f"{aid}:{self.r_map.get(aid, 'Unknown')}" for aid in p_copy.pop("author_ids", [])]
+                result.append(Paper(**p_copy))
+        return result
 
     def search_papers(self, query: str = "", year_from: int = 0, year_to: int = 0, author: str = "", limit: int = 10) -> List[Paper]:
         keywords = query.lower().split() if query else []
@@ -89,15 +99,16 @@ class InMemoryPaperRepository(PaperRepository):
                 continue
             if year_to and p.get("year", 0) > year_to:
                 continue
-            if author_lower and not any(author_lower in a.lower() for a in p.get("authors", [])):
+            if author_lower and not any(author_lower in a.lower() for a in p.get("author_ids", [])):
                 continue
             score = keyword_score(
                 f"{p.get('title','')} {p.get('abstract','')} {p.get('keywords','')} "
-                f"{' '.join(p.get('authors', []))}",
+                f"{' '.join(p.get('author_ids', []))}",
                 keywords,
             ) if keywords else 1
             if score > 0 or not keywords:
-                scored.append((score, p))
-
-        scored.sort(key=lambda x: (-x[0], -x[1].get("citations", 0)))
-        return [Paper(**p) for _, p in scored[:limit]]
+                p_copy = dict(p)
+                p_copy["authors"] = [f"{aid}:{self.r_map.get(aid, 'Unknown')}" for aid in p_copy.pop("author_ids", [])]
+                scored.append((score, p_copy))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [Paper(**item[1]) for item in scored[:limit]]
