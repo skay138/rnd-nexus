@@ -110,6 +110,7 @@
     }
 
     /* ── Markdown ────────────────────────────────────────────────── */
+    sup.cite { color: #a78bfa; font-size: .72em; margin-left: 1px; white-space: nowrap; }
     .msg-body h1 { color: #f0f4ff; font-size: 1.4rem;  font-weight: 700; margin: 1.2rem 0 0.4rem; }
     .msg-body h2 { color: #f0f4ff; font-size: 1.18rem; font-weight: 700; margin: 1.1rem 0 0.35rem; border-bottom: 1px solid #1e2235; padding-bottom: 0.2rem; }
     .msg-body h3 { color: #f0f4ff; font-size: 1.05rem; font-weight: 600; margin: 1rem 0 0.3rem; }
@@ -690,6 +691,7 @@
     }
 
     function renderMarkdown(text) {
+      text = text.replace(/\[#[A-Za-z0-9\-_.]*$/, "");   // 스트리밍 중 잘린 인용 마커 숨김
       var lines = text.split("\n");
       var html  = "";
       var i = 0;
@@ -754,7 +756,25 @@
         html += "<p>" + inlineRender(escHtml(line)) + "</p>";
         i++;
       }
-      return html;
+      return renderCitations(html, text);
+    }
+
+    // [#ID] 인용 마커 → 번호 첨자. 스트리밍 중엔 등장 순 임시 번호,
+    // done 이후엔 서버 references 번호(citeOverride)로 동기화 — 검증 안 된 ID 마커는 제거
+    var citeOverride = null;
+    function renderCitations(html, sourceText) {
+      var map = citeOverride;
+      if (!map) {
+        map = {};
+        var n = 0, m;
+        var scan = /\[#([A-Za-z0-9\-_.]+)\]/g;
+        while ((m = scan.exec(sourceText)) !== null) {
+          if (!(m[1] in map)) map[m[1]] = ++n;
+        }
+      }
+      return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
+        return map[id] ? '<sup class="cite" title="' + id + '">[' + map[id] + ']</sup>' : "";
+      });
     }
 
     // ── Chat helpers ──────────────────────────────────────────────────
@@ -938,11 +958,17 @@
 
               } else if (ev.type === "token") {
                 text += ev.content;
+                citeOverride = null;
                 answerBody.innerHTML = renderMarkdown(text) + '<span class="cursor">▋</span>';
                 scrollChat();
 
               } else if (ev.type === "done") {
                 markRoundDone(currentRound);
+                citeOverride = null;
+                if (ev.references && ev.references.length > 0) {
+                  citeOverride = {};
+                  ev.references.forEach(function(r) { citeOverride[r.id] = r.num; });
+                }
                 answerBody.innerHTML = renderMarkdown(text) || "(응답 없음)";
                 if (ev.references && ev.references.length > 0) {
                   refBlock.style.display = "block";

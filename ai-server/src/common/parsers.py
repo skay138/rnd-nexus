@@ -38,6 +38,61 @@ def entity_ids(d: dict) -> list[str]:
     return [str(d[k]) for k in _ENTITY_ID_KEYS if d.get(k)]
 
 
+def collect_relevant_data(task_execution_results: list) -> list[dict]:
+    """generate 컨텍스트에 포함할 데이터를 태스크별로 선별한다.
+
+    generator(<수집된 데이터> 블록)와 references(출처)가 공유하는 단일 규칙:
+    - 엔티티 리스트 결과: 워커 selected_ids로 필터링하되, 선별 ID가 실제 수집 ID와
+      전혀 매칭되지 않으면(환각 ID) 선별을 무시하고 전문 사용. 전역 entity-ID dedup.
+    - 비엔티티 결과(그래프 네트워크 dict 등): 문자열 동일성 dedup으로 그대로 포함.
+
+    반환: [{"task_description": str, "items": [...]}]
+      items 원소가 list면 엔티티 그룹(list[dict]), str이면 비엔티티 result_text.
+    """
+    blocks: list[dict] = []
+    seen_ids: set[str] = set()
+    seen_text: set[str] = set()
+
+    for r in task_execution_results:
+        calls = [
+            (tc, list(iter_entities(tc.get("result_text", ""))))
+            for tc in r.get("tool_calls", [])
+            if not tc.get("is_error") and tc.get("result_text")
+        ]
+
+        sel = {str(i) for i in r.get("selected_ids", []) if i}
+        if sel:
+            present = {i for _, ents in calls for e in ents for i in entity_ids(e)}
+            if not (sel & present):
+                sel = set()
+
+        items: list = []
+        for tc, entities in calls:
+            if entities:
+                kept: list[dict] = []
+                for e in entities:
+                    ids = entity_ids(e)
+                    if sel and ids and not (set(ids) & sel):
+                        continue
+                    keys = ids or [json.dumps(e, sort_keys=True, ensure_ascii=False)]
+                    if any(k in seen_ids for k in keys):
+                        continue
+                    seen_ids.update(keys)
+                    kept.append(e)
+                if kept:
+                    items.append(kept)
+            else:
+                text = tc["result_text"]
+                if text in seen_text:
+                    continue
+                seen_text.add(text)
+                items.append(text)
+
+        if items:
+            blocks.append({"task_description": r.get("task_description", ""), "items": items})
+    return blocks
+
+
 def try_parse(s: str) -> Any:
     """JSON 우선, 실패 시 ast.literal_eval로 파싱."""
     try:

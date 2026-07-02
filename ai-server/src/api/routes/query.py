@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Any, AsyncGenerator
 
@@ -11,7 +12,7 @@ from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from api.schemas import QueryRequest
 from common.config.query_config import QueryConfig, RequestConfig
-from common.parsers import iter_entities
+from common.parsers import collect_relevant_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,20 +44,60 @@ def _entity_to_ref(d: dict) -> dict | None:
     return None
 
 
-def _build_references(task_execution_results: list) -> list:
-    refs: list = []
+def _is_cited(ref: dict, answer: str) -> bool:
+    """답변 텍스트에 엔티티의 ID·이름·제목이 언급됐는지 확인."""
+    rid = str(ref.get("id", ""))
+    if rid and rid in answer:
+        return True
+    title = str(ref.get("title", "")).strip()
+    if not title:
+        return False
+    if title in answer:
+        return True
+    # 긴 제목은 앞부분 부분 매칭 허용 (모델이 제목을 축약해 인용하는 경우)
+    return len(title) > 20 and title[:20] in answer
+
+
+_CITE_RE = re.compile(r"\[#([A-Za-z0-9\-_.]+)\]")
+
+
+def _build_references(task_execution_results: list, answer_text: str = "") -> list:
+    """출처 목록 생성 — 3단계 우아한 강등.
+
+    후보는 generate가 실제로 본 엔티티(collect_relevant_data — 워커 선별·dedup 동일 규칙).
+    1. 답변의 [#ID] 인용 마커 → 후보 ID와 검증해 정확 매핑 (등장 순서 = 출처 번호).
+       동명이인·다년차 동일 제목 과제도 ID로 구분됨. 환각 마커는 폐기.
+    2. 유효 마커가 없으면 이름·제목 사후 매칭(_is_cited).
+    3. 그래도 없으면 후보 전체 fallback. 단 "관련 정보 없음" 답변은 출처 없음.
+    """
+    candidates: list = []
     seen: set = set()
-    for result in task_execution_results:
-        for tc in result.get("tool_calls", []):
-            if tc.get("is_error"):
+    for block in collect_relevant_data(task_execution_results):
+        for item in block["items"]:
+            if not isinstance(item, list):
                 continue
-            for d in iter_entities(tc.get("result_text", "")):
+            for d in item:
                 ref = _entity_to_ref(d)
                 if ref and ref["id"] and ref["id"] not in seen:
                     seen.add(ref["id"])
-                    ref["num"] = len(refs) + 1
-                    refs.append(ref)
-    return refs
+                    candidates.append(ref)
+
+    if "관련 정보를 찾을 수 없" in answer_text:
+        return []
+
+    cited: list = []
+    marker_ids = list(dict.fromkeys(_CITE_RE.findall(answer_text)))
+    if marker_ids:
+        by_id = {r["id"]: r for r in candidates}
+        cited = [by_id[i] for i in marker_ids if i in by_id]
+    if not cited and answer_text:
+        cited = [r for r in candidates if _is_cited(r, answer_text)]
+    if cited:
+        candidates = cited
+
+    for n, ref in enumerate(candidates, 1):
+        ref["num"] = n
+    return candidates
 
 
 @router.post("/agent/query")
@@ -205,5 +246,5 @@ async def _stream_events(
         logger.warning("[query] 토큰 미수신 — final_answer fallback 전송 (len=%d)", len(last_final_answer))
         yield json.dumps({"type": "token", "content": last_final_answer})
 
-    references = _build_references(last_task_execution_results)
+    references = _build_references(last_task_execution_results, last_final_answer)
     yield json.dumps({"type": "done", "references": references})

@@ -4,7 +4,7 @@ import time
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
-from common.parsers import entity_ids, iter_entities, strip_think
+from common.parsers import collect_relevant_data, strip_think
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState
 from agent.utils.context import split_turns, previous_turn_context
@@ -17,52 +17,15 @@ logger = logging.getLogger(__name__)
 def _format_collected_data(task_execution_results: list) -> str:
     """task_execution_results → generate 컨텍스트용 데이터 블록.
 
-    - 엔티티 리스트 결과: 전역 entity-ID 단위 dedup (워커 간 중복 수집 제거).
-      워커가 선별한 selected_ids가 있으면 해당 엔티티만 포함하되,
-      선별 ID가 실제 수집 ID와 전혀 매칭되지 않으면(환각 ID) 선별을 무시하고 전문 사용.
-    - 비엔티티 결과(그래프 네트워크 dict 등): 문자열 동일성 dedup으로 그대로 포함.
+    선별·dedup 규칙은 collect_relevant_data(출처 생성과 공유)에 위임한다.
     """
     blocks: list[str] = []
-    seen_ids: set[str] = set()
-    seen_text: set[str] = set()
-
-    for r in task_execution_results:
-        calls = [
-            (tc, list(iter_entities(tc.get("result_text", ""))))
-            for tc in r.get("tool_calls", [])
-            if not tc.get("is_error") and tc.get("result_text")
+    for b in collect_relevant_data(task_execution_results):
+        parts = [
+            json.dumps(item, ensure_ascii=False) if isinstance(item, list) else item
+            for item in b["items"]
         ]
-
-        sel = {str(i) for i in r.get("selected_ids", []) if i}
-        if sel:
-            present = {i for _, ents in calls for e in ents for i in entity_ids(e)}
-            if not (sel & present):
-                sel = set()
-
-        parts: list[str] = []
-        for tc, entities in calls:
-            if entities:
-                kept: list[dict] = []
-                for e in entities:
-                    ids = entity_ids(e)
-                    if sel and ids and not (set(ids) & sel):
-                        continue
-                    keys = ids or [json.dumps(e, sort_keys=True, ensure_ascii=False)]
-                    if any(k in seen_ids for k in keys):
-                        continue
-                    seen_ids.update(keys)
-                    kept.append(e)
-                if kept:
-                    parts.append(json.dumps(kept, ensure_ascii=False))
-            else:
-                text = tc["result_text"]
-                if text in seen_text:
-                    continue
-                seen_text.add(text)
-                parts.append(text)
-
-        if parts:
-            blocks.append(f"### {r.get('task_description', '')}\n" + "\n".join(parts))
+        blocks.append(f"### {b['task_description']}\n" + "\n".join(parts))
     return "\n\n".join(blocks)
 
 
@@ -129,8 +92,9 @@ Do not add background information, related topics, or additional entities.
 </instructions>
 
 <constraints>
-- Do not expose internal implementation details such as graph nodes, edge names, retrieval steps, tool calls, or internal IDs. Describe internal concepts naturally in Korean when necessary.
-- Do not include citations, references, or source lists.
+- Citation: when a statement is based on an entity from <수집된 데이터>, append that entity's ID marker [#ID] immediately after the statement (e.g. "…를 개발했습니다 [#P002].", multiple: [#P002][#R001]). Use ONLY IDs that appear in <수집된 데이터> — never invent an ID.
+- Except inside [#ID] markers, do not expose internal implementation details such as graph nodes, edge names, retrieval steps, tool calls, or raw IDs in prose. Describe internal concepts naturally in Korean when necessary.
+- Do not write any other citation format or a source/reference list section — [#ID] markers are the only citation.
 - Do not append generic closing sections such as "참고 사항", "추가 정보", "주의", or "수집 범위 외".
 - Do not add generic concluding sentences that summarize the field or introduce additional entities (e.g. "이 외에도 X, Y, Z가 관련 분야에 참여하고 있습니다" is forbidden).
 - Do not explain what was excluded or why. Simply omit irrelevant results without comment. Sentences like "기타 기관(A, B, C 등)은 관련성이 없습니다" or "A, B, C는 다른 분야에 집중하고 있습니다" are forbidden.
