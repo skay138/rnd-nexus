@@ -20,17 +20,22 @@ router = APIRouter()
 
 _ENTITY_ID_KEYS: list[tuple[str, str, str | None]] = [
     # (id_key, type_label, title_key)  — title_key=None → try name then title
-    ("paper_id",      "Paper",        "title"),
-    ("patent_id",     "Patent",       "title"),
-    ("researcher_id", "Researcher",   "name"),
-    ("tech_id",       "Technology",   "name"),
-    ("technology_id", "Technology",   "name"),
-    ("project_id",    "Project",      "title"),
-    ("org_id",        "Organization", "name"),
+    ("paper_id",        "Paper",        "title"),
+    ("patent_id",       "Patent",       "title"),
+    ("researcher_id",   "Researcher",   "name"),
+    ("tech_id",         "Technology",   "name"),
+    ("technology_id",   "Technology",   "name"),
+    ("project_id",      "Project",      "title"),
+    ("org_id",          "Organization", "name"),
+    ("source_paper_id", "Paper",        "source"),
+    ("target_paper_id", "Paper",        "target"),
 ]
 
 
-def _entity_to_ref(d: dict) -> dict | None:
+def _extract_refs_from_dict(d: dict) -> list[dict]:
+    refs = []
+    
+    # 1. 일반 엔티티 (search_papers 등) 및 엣지 엔티티 (source_paper_id 등)
     for id_key, label, title_key in _ENTITY_ID_KEYS:
         if id_key in d:
             title = (
@@ -40,20 +45,17 @@ def _entity_to_ref(d: dict) -> dict | None:
                 or d.get("researcher")   # get_researcher_network: "researcher" key holds the name
                 or ""
             )
-            return {"type": label, "id": d[id_key], "title": title}
+            refs.append({"type": label, "id": d[id_key], "title": title})
+            
+    # 2. node_type 명시된 그래프 노드
     if "node_type" in d:
-        return {
+        refs.append({
             "type":  d["node_type"],
             "id":    str(d.get("id") or d.get("entity_id") or ""),
             "title": d.get("name") or d.get("title") or "",
-        }
-    # get_citation_graph: {source, source_id, target, target_id, ...} 형식 — 행당 2개 엔티티
-    # 여기서는 source/target 각각을 별도 엔티티로 다루지 않고 첫 번째 유효 ID만 사용
-    if "source_id" in d:
-        return {"type": "Paper", "id": str(d["source_id"]), "title": d.get("source") or ""}
-    if "target_id" in d:
-        return {"type": "Paper", "id": str(d["target_id"]), "title": d.get("target") or ""}
-    return None
+        })
+        
+    return refs
 
 
 
@@ -76,9 +78,9 @@ _CITE_RE = re.compile(r"(?:\[#|\[|\()([A-Za-z0-9\-_.]+)(?:\]|\))")
 def _extract_all_refs(obj: Any) -> list[dict]:
     refs = []
     if isinstance(obj, dict):
-        ref = _entity_to_ref(obj)
-        if ref and ref.get("id"):
-            refs.append(ref)
+        for ref in _extract_refs_from_dict(obj):
+            if ref and ref.get("id"):
+                refs.append(ref)
         
         for k, v in obj.items():
             if k == "authors" and isinstance(v, list):

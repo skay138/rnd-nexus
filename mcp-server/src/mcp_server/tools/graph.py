@@ -74,9 +74,9 @@ def register_graph_tools(mcp: FastMCP) -> None:
             depth:       탐색 홉 수 (1~3, 기본 2)
 
         Returns:
-            [{source, source_id, target, target_id, year, hops}, ...]
+            [{source, source_paper_id, target, target_paper_id, year, hops}, ...]
             source/target: 논문 제목
-            source_id/target_id: 논문 ID
+            source_paper_id/target_paper_id: 논문 ID
             hops: 출발 논문으로부터의 홉 수
         """
         fn = repository_factory.get_citation_graph_fn()

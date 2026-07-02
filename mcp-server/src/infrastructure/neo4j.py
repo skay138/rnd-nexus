@@ -93,8 +93,8 @@ def make_fetch_citation_graph_fn(driver: Any) -> Any:
         cypher = (
             f"MATCH path = (p:Paper)-[:CITES*1..{safe_depth}]->(cited:Paper) "
             f"{where} "
-            "RETURN p.title AS source, p.id AS source_id, "
-            "cited.title AS target, cited.id AS target_id, "
+            "RETURN p.title AS source, p.id AS source_paper_id, "
+            "cited.title AS target, cited.id AS target_paper_id, "
             "cited.year AS year, length(path) AS hops "
             "LIMIT 50"
         )

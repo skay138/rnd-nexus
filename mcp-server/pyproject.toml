@@ -18,4 +18,4 @@ dependencies = [
 package = false
 
 [tool.pyrefly]
-search_path = ["src", "../domain"]
+search_path = ["src", ".."]
