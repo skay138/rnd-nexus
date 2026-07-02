@@ -332,6 +332,25 @@ def seed_neo4j(uri: str, username: str, password: str, clear: bool) -> None:
                     pid=proj["project_id"], tid=tid,
                 )
 
+        # PRODUCED: Project -> Paper
+        print("[Neo4j]   Creating PRODUCED (Paper) relationships...")
+        for proj in fixtures["projects"]:
+            for pid_paper in proj.get("produced_papers", []):
+                session.run(
+                    "MATCH (pr:Project {project_id: $pid}), (p:Paper {paper_id: $paper_id}) "
+                    "MERGE (pr)-[:PRODUCED]->(p)",
+                    pid=proj["project_id"], paper_id=pid_paper,
+                )
+
+        # PRODUCED: Project -> Patent
+        print("[Neo4j]   Creating PRODUCED (Patent) relationships...")
+        for proj in fixtures["projects"]:
+            for pid_pat in proj.get("produced_patents", []):
+                session.run(
+                    "MATCH (pr:Project {project_id: $pid}), (pat:Patent {patent_id: $pat_id}) "
+                    "MERGE (pr)-[:PRODUCED]->(pat)",
+                    pid=proj["project_id"], pat_id=pid_pat,
+                )
     driver.close()
     print("[Neo4j] Done.")
 

@@ -9,8 +9,23 @@
     "status": "진행중",
     "keywords": "뉴로모픽 AI 반도체 원천기술 저전력",
     "text": "차세대 뉴로모픽 AI 반도체 원천기술 개발. ETRI. 뉴로모픽 AI 반도체 원천기술 저전력 시냅스 뉴런",
-    "employs_researchers": ["R001", "R007"],
-    "uses_technologies": ["T002", "T007"]
+    "employs_researchers": [
+      "R001",
+      "R007"
+    ],
+    "uses_technologies": [
+      "T002",
+      "T007"
+    ],
+    "produced_papers": [
+      "P001",
+      "P005",
+      "P008"
+    ],
+    "produced_patents": [
+      "KR10-2024-0012345",
+      "US11876543"
+    ]
   },
   {
     "project_id": "RS-2023-00098765",
@@ -22,8 +37,23 @@
     "status": "진행중",
     "keywords": "PIM 에너지효율 AI 가속기 메모리",
     "text": "PIM 기반 에너지 효율 AI 가속기 개발. KAIST. PIM 에너지효율 AI 가속기 메모리 Processing-in-Memory",
-    "employs_researchers": ["R003", "R001"],
-    "uses_technologies": ["T001", "T006"]
+    "employs_researchers": [
+      "R003",
+      "R001"
+    ],
+    "uses_technologies": [
+      "T001",
+      "T006"
+    ],
+    "produced_papers": [
+      "P001",
+      "P002",
+      "P003"
+    ],
+    "produced_patents": [
+      "KR10-2024-0012345",
+      "US11234567"
+    ]
   },
   {
     "project_id": "RS-2024-00234567",
@@ -35,8 +65,22 @@
     "status": "진행중",
     "keywords": "온디바이스 AI NPU 초저전력 추론 설계",
     "text": "온디바이스 AI 추론용 초저전력 NPU 설계 기술. 삼성전자 POSTECH. 온디바이스 AI NPU 초저전력 추론 LLM 설계",
-    "employs_researchers": ["R002", "R004"],
-    "uses_technologies": ["T005", "T004"]
+    "employs_researchers": [
+      "R002",
+      "R004"
+    ],
+    "uses_technologies": [
+      "T005",
+      "T004"
+    ],
+    "produced_papers": [
+      "P004",
+      "P009",
+      "P011"
+    ],
+    "produced_patents": [
+      "KR10-2024-0034521"
+    ]
   },
   {
     "project_id": "RS-2023-00112233",
@@ -48,8 +92,19 @@
     "status": "완료",
     "keywords": "AI 반도체 테스트 검증 신뢰성 플랫폼",
     "text": "고신뢰 AI 반도체 테스트 검증 플랫폼 구축. 한국전자통신연구원. AI 반도체 테스트 검증 신뢰성 플랫폼",
-    "employs_researchers": ["R002"],
-    "uses_technologies": ["T004"]
+    "employs_researchers": [
+      "R002"
+    ],
+    "uses_technologies": [
+      "T004"
+    ],
+    "produced_papers": [
+      "P009",
+      "P011"
+    ],
+    "produced_patents": [
+      "KR10-2024-0034521"
+    ]
   },
   {
     "project_id": "RS-2022-00055678",
@@ -61,8 +116,16 @@
     "status": "완료",
     "keywords": "EDA AI 반도체 국산화 설계자동화",
     "text": "AI 반도체 EDA 도구 국산화 기술 개발. 서울대학교. EDA AI 반도체 국산화 설계자동화 컴파일러",
-    "employs_researchers": ["R006"],
-    "uses_technologies": ["T005"]
+    "employs_researchers": [
+      "R006"
+    ],
+    "uses_technologies": [
+      "T005"
+    ],
+    "produced_papers": [
+      "P010"
+    ],
+    "produced_patents": []
   },
   {
     "project_id": "RS-2024-00345678",
@@ -74,8 +137,21 @@
     "status": "진행중",
     "keywords": "3D 이종집적 AI 칩 패키징 3DIC",
     "text": "3D 이종집적 AI 칩 패키징 기술. POSTECH. 3D 이종집적 AI 칩 패키징 3DIC HBM 적층",
-    "employs_researchers": ["R004", "R003"],
-    "uses_technologies": ["T004"]
+    "employs_researchers": [
+      "R004",
+      "R003"
+    ],
+    "uses_technologies": [
+      "T004"
+    ],
+    "produced_papers": [
+      "P002",
+      "P003",
+      "P004"
+    ],
+    "produced_patents": [
+      "US11234567"
+    ]
   },
   {
     "project_id": "RS-2023-00223344",
@@ -87,8 +163,20 @@
     "status": "진행중",
     "keywords": "RISC-V 오픈소스 AI 프로세서 생태계",
     "text": "RISC-V 기반 오픈 AI 프로세서 생태계 구축. 한양대학교. RISC-V 오픈소스 AI 프로세서 생태계",
-    "employs_researchers": ["R009", "R006"],
-    "uses_technologies": ["T005"]
+    "employs_researchers": [
+      "R009",
+      "R006"
+    ],
+    "uses_technologies": [
+      "T005"
+    ],
+    "produced_papers": [
+      "P006",
+      "P010"
+    ],
+    "produced_patents": [
+      "KR10-2023-0067890"
+    ]
   },
   {
     "project_id": "RS-2024-00456789",
@@ -100,8 +188,18 @@
     "status": "진행중",
     "keywords": "엣지 AI 반도체 표준화 인증 국제",
     "text": "엣지 AI 반도체 국제 표준화 및 인증 체계. KETI. 엣지 AI 반도체 표준화 인증 국제 CXL",
-    "employs_researchers": ["R005"],
-    "uses_technologies": ["T002", "T005"]
+    "employs_researchers": [
+      "R005"
+    ],
+    "uses_technologies": [
+      "T002",
+      "T005"
+    ],
+    "produced_papers": [
+      "P002",
+      "P012"
+    ],
+    "produced_patents": []
   },
   {
     "project_id": "RS-2022-00078901",
@@ -113,8 +211,23 @@
     "status": "진행중",
     "keywords": "AI 반도체 소재 공정 원천기술",
     "text": "AI 반도체 소재 공정 원천기술 개발. KIST. AI 반도체 소재 공정 원천기술 RRAM PCM 광자",
-    "employs_researchers": ["R010", "R007"],
-    "uses_technologies": ["T007", "T003"]
+    "employs_researchers": [
+      "R010",
+      "R007"
+    ],
+    "uses_technologies": [
+      "T007",
+      "T003"
+    ],
+    "produced_papers": [
+      "P005",
+      "P007",
+      "P008"
+    ],
+    "produced_patents": [
+      "CN202310098765",
+      "US11876543"
+    ]
   },
   {
     "project_id": "RS-2023-00334455",
@@ -126,7 +239,20 @@
     "status": "진행중",
     "keywords": "스파스 연산 AI 가속기 아키텍처 최적화",
     "text": "스파스 연산 최적화 AI 가속기 아키텍처 연구. UNIST. 스파스 연산 AI 가속기 아키텍처 최적화 sparse tensor transformer",
-    "employs_researchers": ["R008", "R002"],
-    "uses_technologies": ["T001", "T005"]
+    "employs_researchers": [
+      "R008",
+      "R002"
+    ],
+    "uses_technologies": [
+      "T001",
+      "T005"
+    ],
+    "produced_papers": [
+      "P009",
+      "P011"
+    ],
+    "produced_patents": [
+      "KR10-2024-0034521"
+    ]
   }
 ]

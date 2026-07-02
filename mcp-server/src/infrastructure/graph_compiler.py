@@ -18,6 +18,7 @@ _NEO4J_RELATIONS: dict[str, tuple[str, str]] = {
     "CITES":      ("Paper",      "Paper"),
     "EMPLOYS":    ("Project",    "Researcher"),
     "USES":       ("Project",    "Technology"),
+    "PRODUCED":   ("Project",    "Paper/Patent"),
 }
 
 SCHEMA_HINT = """
@@ -31,6 +32,7 @@ Neo4j 노드: Paper | Patent | Researcher | Technology | Project | Organization
   CITES      (Paper)-[:CITES]->(Paper)
   EMPLOYS    (Project)-[:EMPLOYS]->(Researcher)
   USES       (Project)-[:USES]->(Technology)
+  PRODUCED   (Project)-[:PRODUCED]->(Paper/Patent)
 
 hops direction (semantic_graph_search):
   direction="out" (기본): (현재노드)-[:REL]->(다음노드)
@@ -41,6 +43,7 @@ hops direction (semantic_graph_search):
   Paper→Researcher:      {"relation":"AUTHORED","direction":"in","target_type":"Researcher"}
   Project→Researcher:    {"relation":"EMPLOYS","direction":"out","target_type":"Researcher"}
   Technology→Project:    {"relation":"USES","direction":"in","target_type":"Project"}
+  Project→Patent:        {"relation":"PRODUCED","direction":"out","target_type":"Patent"}
   Paper→인용Paper:        {"relation":"CITES","direction":"out","target_type":"Paper"}
 """
 
