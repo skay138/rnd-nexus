@@ -5,18 +5,20 @@ import re
 import time
 from pydantic import BaseModel, Field
 from typing import Any
-from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm, llm_ainvoke
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState, TaskSpec
+from agent.utils.context import split_turns, previous_turn_context
 from config import get_settings
-from memory.compaction import should_compact, compact_messages
+from memory.compaction import apply_compaction
 
 logger = logging.getLogger(__name__)
 
 
 class OrchestratorPlan(BaseModel):
+    reasoning: str = Field(default="", description="수집 현황 평가와 다음 계획 전략 (한국어 1~2문장)")
     tasks: list[str]  = Field(description="병렬 실행할 '자연어' 태스크 지시문 목록. 수집 완료 시 빈 리스트")
     out_of_scope: bool = Field(default=False, description="날씨·요리·스포츠·코딩 등 R&D와 전혀 무관한 질문이면 true. R&D 용어·개념 질문, 논문·특허·연구자·기술·과제 관련 질문은 false")
 
@@ -32,7 +34,8 @@ _STRATEGY = """
 - If one task's output (IDs, identifiers) is required as input for the next, never split them — merge into a single task. Workers handle sequential steps autonomously within a task.
 - If a task description contains "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" (dependency signals in Korean), it depends on a prior task's results — merge it with the preceding task.
 - Tasks that use only the same user-supplied input (name, keyword) are independent and can run in parallel.
-- If previous tool results show sufficient data, return tasks=[] to finish; otherwise plan additional tasks from a different angle, keyword, or scope.
+- Judge data sufficiency from the [수집 결과] messages collected in this turn. If they cover the user's question, return tasks=[] to finish; otherwise plan additional tasks from a different angle, keyword, or scope.
+- If [수집 결과] shows empty results (빈 결과) or a failure report for a search, never plan the same search again — change keywords or scope, or finish with tasks=[].
 - Each task must include the core keywords from the user's question (names, IDs, etc.).
 - If IDs or identifiers have already been collected, include them directly in the task description.
 - Do not expand into new domains or topics beyond the scope of the original question.
@@ -113,30 +116,30 @@ Each worker reads the task description and autonomously selects the appropriate 
 </constraints>
 
 <output_format>
-Output ONLY a JSON object with EXACTLY these two keys — no other keys allowed:
+Output ONLY a JSON object with EXACTLY these three keys, in this order — no other keys allowed:
+  "reasoning": string (1~2 Korean sentences — evaluate collected data and state your strategy BEFORE deciding tasks)
   "tasks": array of strings (Korean task descriptions, or [] when done)
   "out_of_scope": boolean
 
 Examples:
-  Need data:    {{"tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
-  Done:         {{"tasks": [], "out_of_scope": false}}
-  Out of scope: {{"tasks": [], "out_of_scope": true}}
-  Term/concept: {{"tasks": [], "out_of_scope": false}}
+  Need data:    {{"reasoning": "아직 수집된 데이터가 없어 논문과 특허를 병렬로 조사한다.", "tasks": ["태스크1", "태스크2"], "out_of_scope": false}}
+  Done:         {{"reasoning": "질문에 답하기에 충분한 데이터가 수집되었다.", "tasks": [], "out_of_scope": false}}
+  Out of scope: {{"reasoning": "R&D와 무관한 질문이다.", "tasks": [], "out_of_scope": true}}
+  Term/concept: {{"reasoning": "용어 설명 질문으로 데이터 수집이 불필요하다.", "tasks": [], "out_of_scope": false}}
 </output_format>"""
 
-    messages = list(state["messages"])
-    approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
-    compaction_msgs: list = []
-    if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
-        compacted = await compact_messages(messages, llm_plain)
-        kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
-        compaction_msgs = [RemoveMessage(id=m.id) for m in messages if getattr(m, "id", None) and m.id not in kept_ids]
-        compaction_msgs.append(compacted[0])
-        messages = compacted
+    messages, compaction_msgs = await apply_compaction(
+        list(state["messages"]),
+        get_llm(model=RequestConfig.current().compact_model or settings.rnd_model),
+    )
 
-    # tool_results JSON 마커 스킵 — orchestrator 메시지는 그대로 포함
-    relevant_msgs = [m for m in messages if getattr(m, "name", None) != "tool_results"]
+    # 턴 경계 분리: 이전 턴은 질문·최종답변만, 현재 턴은 질문·계획·수집 요약만
+    prev_turns, current_turn = split_turns(messages)
+    relevant_msgs = previous_turn_context(prev_turns) + [
+        m for m in current_turn
+        if isinstance(m, HumanMessage)
+        or getattr(m, "name", None) in ("orchestrator", "tool_results")
+    ]
 
     today = datetime.date.today().strftime("%Y년 %m월 %d일")
     date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
@@ -150,6 +153,7 @@ Examples:
     t0 = time.perf_counter()
     tasks: list[str] = []
     out_of_scope = False
+    plan_reasoning = ""
     retry_msgs = list(invoke_msgs)
     for attempt in range(_MAX_RETRIES + 1):
         raw = ""
@@ -158,13 +162,14 @@ Examples:
             plan = OrchestratorPlan.model_validate_json(_strip_code_fence(raw))
             tasks = _merge_dependent_tasks(plan.tasks)
             out_of_scope = plan.out_of_scope
+            plan_reasoning = plan.reasoning.strip()
             break
         except Exception as e:
             if attempt < _MAX_RETRIES:
                 logger.warning("[orchestrator] JSON 파싱 실패, 재시도 (%d/%d): %s\n[Raw Output]: %s", attempt + 1, _MAX_RETRIES, e, raw)
                 retry_msgs = list(invoke_msgs) + [
                     AIMessage(content=raw),
-                    HumanMessage(content=f'Invalid output. Required: {{"tasks": [...], "out_of_scope": bool}} — exactly these two keys only. Retry.'),
+                    HumanMessage(content='Invalid output. Required: {"reasoning": "...", "tasks": [...], "out_of_scope": bool} — exactly these three keys only. Retry.'),
                 ]
             else:
                 logger.error("[orchestrator] structured output 최종 실패: %s\n[Raw Output]: %s", e, raw)
@@ -172,17 +177,18 @@ Examples:
 
     if tasks:
         task_lines = "\n".join(f"  - {t}" for t in tasks)
-        msg_content = f"[계획한 태스크]\n{task_lines}"
+        msg_content = f"{plan_reasoning}\n\n[계획한 태스크]\n{task_lines}".strip()
     elif out_of_scope:
-        msg_content = "[범위 외 질문]"
+        msg_content = f"{plan_reasoning}\n\n[범위 외 질문]".strip()
     else:
-        msg_content = "[수집 완료 — 생성 단계 진행]"
+        msg_content = f"{plan_reasoning}\n\n[수집 완료 — 생성 단계 진행]".strip()
 
     status = "→ generate" if not tasks else "→ executor"
     task_lines = "\n".join(f"    {i+1}. {t}" for i, t in enumerate(tasks)) if tasks else "    (없음)"
     logger.debug(
-        "[ORCH] round=%d/%d  %.2fs  tasks=%d  %s\n  tasks:\n%s",
+        "[ORCH] round=%d/%d  %.2fs  tasks=%d  %s\n  reasoning: %s\n  tasks:\n%s",
         iteration_count + 1, max_iterations, elapsed, len(tasks), status,
+        plan_reasoning or "(없음)",
         task_lines,
     )
 

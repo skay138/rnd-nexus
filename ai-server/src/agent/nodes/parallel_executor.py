@@ -50,6 +50,25 @@ def _build_history_summary(task_execution_results: list[dict]) -> str:
     return "\n".join(lines) if lines else ""
 
 
+def _format_round_results(results: list[TaskExecutionResult]) -> str:
+    """라운드 결과를 읽기 쉬운 요약으로 변환 — state.messages에 올라가는 유일한 산출물.
+
+    전체 result_text는 task_execution_results에만 저장되고, 공유 컨텍스트에는
+    태스크별 도구 요약과 워커 보고만 노출한다.
+    """
+    lines = ["[수집 결과]"]
+    for r in results:
+        lines.append(f"태스크: {r['task_description']}")
+        for tc in r["tool_calls"]:
+            mark = "✗" if tc["is_error"] else "-"
+            lines.append(f"  {mark} {tc['tool_name']}: {tc['summary']}")
+        if not r["tool_calls"]:
+            lines.append("  (도구 호출 없음)")
+        if r.get("worker_note"):
+            lines.append(f"  보고: {r['worker_note']}")
+    return "\n".join(lines)
+
+
 async def _run_worker(
     task: TaskSpec,
     tools_by_name: dict[str, Any],
@@ -58,22 +77,22 @@ async def _run_worker(
     original_query: str = "",
     history_summary: str = "",
     sse_queue: asyncio.Queue | None = None,
-) -> tuple[TaskExecutionResult, list]:
-    """Mini ReAct agent — TaskSpec을 받아 도구를 선택·실행하고
-    (TaskExecutionResult, worker_messages) 튜플을 반환한다.
+) -> TaskExecutionResult:
+    """Mini ReAct agent — TaskSpec을 받아 도구를 선택·실행하고 TaskExecutionResult를 반환한다.
 
-    worker_messages: state.messages에 추가할 AIMessage(tool_calls) + ToolMessage 쌍.
+    도구 호출 트래픽(AIMessage(tool_calls)+ToolMessage)은 워커 내부에 격리되며
+    state.messages에는 올라가지 않는다. 전체 result_text는 task_execution_results로만 전달.
     """
     task_id = task["id"]
     task_description = task["description"]
     tool_calls: list[ToolCallRecord] = []
-    messages_for_state: list = []   # state.messages에 추가할 tool 상호작용 메시지
+    worker_note = ""   # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
 
     llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
 
     system = SystemMessage(content="""<role>
-You are an R&D data collection worker. Execute tool calls only — do not analyze, summarize, or explain.
+You are an R&D data collection worker. Collect the requested data by calling tools — do not write analysis or interpretation.
 </role>
 
 <instructions>
@@ -81,6 +100,7 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
 - After obtaining IDs from a search, call detail-retrieval tools to collect affiliation, specialty, abstract, and other detailed fields.
 - Stop when sufficient data is collected or there is nothing more to retrieve.
 - If [Completed tasks from previous rounds] is provided, do not repeat the same searches.
+- When you finish, reply with ONE short Korean line reporting what was collected or why nothing was found (e.g. "논문 3건과 저자 상세 정보 수집 완료", "관련 특허 검색 결과 없음"). No analysis or interpretation.
 </instructions>""")
 
     task_content = (
@@ -100,14 +120,12 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
             messages.append(response)
 
             if not getattr(response, "tool_calls", None):
+                worker_note = str(response.content).strip()
                 logger.debug(
-                    "[WORKER] %-38s  ✓ done  %d steps  %d tools",
-                    f'"{task_description[:35]}"', step + 1, len(tool_calls),
+                    "[WORKER] %-38s  ✓ done  %d steps  %d tools  note=%s",
+                    f'"{task_description[:35]}"', step + 1, len(tool_calls), worker_note[:60],
                 )
                 break
-
-            # tool_calls가 있는 AIMessage → state에 포함
-            messages_for_state.append(response)
 
             for tc in response.tool_calls:
                 tool_name = tc["name"]
@@ -116,12 +134,10 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
 
                 if call_key in seen_calls:
                     logger.debug("[worker:%s] 중복 호출 건너뜀: %s", task_description[:40], call_key[:80])
-                    skip_msg = ToolMessage(
+                    messages.append(ToolMessage(
                         content="[SKIP] 이미 동일한 호출 결과가 있습니다.",
                         tool_call_id=tc["id"],
-                    )
-                    messages.append(skip_msg)
-                    messages_for_state.append(skip_msg)
+                    ))
                     continue
                 seen_calls.add(call_key)
 
@@ -148,9 +164,7 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
                 }
                 tool_calls.append(record)
 
-                tool_msg = ToolMessage(content=result_text, tool_call_id=tc["id"])
-                messages.append(tool_msg)
-                messages_for_state.append(tool_msg)   # state에 포함
+                messages.append(ToolMessage(content=result_text, tool_call_id=tc["id"]))
 
                 logger.debug(
                     "[WORKER] %-38s  step=%d  %s  %.2fs\n  in  | %s\n  out | %s",
@@ -178,8 +192,9 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
             "round":            current_round,
             "status":           status,
             "tool_calls":       tool_calls,
+            "worker_note":      worker_note,
         }
-        return result, messages_for_state
+        return result
 
     except Exception as e:
         logger.error("[worker:%s] 에러: %s", task_description[:40], e)
@@ -195,8 +210,9 @@ You are an R&D data collection worker. Execute tool calls only — do not analyz
                 "summary":     "워커 오류",
                 "is_error":    True,
             }],
+            "worker_note":      "",
         }
-        return err_result, messages_for_state
+        return err_result
 
 
 async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict:
@@ -207,7 +223,22 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
     if not pending_tasks:
         return {"pending_tasks": []}
 
-    fresh_tasks = pending_tasks
+    # 코드 레벨 중복 태스크 차단 — 이번 턴에 이미 실행된 task_id는 재실행하지 않음
+    executed_ids = {r["task_id"] for r in state.get("task_execution_results", [])}
+    fresh_tasks = [t for t in pending_tasks if t["id"] not in executed_ids]
+    if len(fresh_tasks) < len(pending_tasks):
+        logger.warning(
+            "[EXEC] 중복 태스크 %d건 건너뜀: %s",
+            len(pending_tasks) - len(fresh_tasks),
+            [t["description"][:40] for t in pending_tasks if t["id"] in executed_ids],
+        )
+    if not fresh_tasks:
+        note = AIMessage(
+            content="[수집 결과]\n(계획된 태스크가 모두 이미 실행된 태스크와 중복되어 건너뜀 — 새 데이터 없음. "
+                    "다른 각도의 태스크를 계획하거나 수집을 종료하세요.)",
+            name="tool_results",
+        )
+        return {"messages": [note], "pending_tasks": []}
 
     current_round   = state.get("iteration_count", 0)
     original_query  = RequestConfig.current().original_query
@@ -220,7 +251,7 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
         "\n".join(f"  dispatch | {t['description'][:60]}" for t in fresh_tasks),
     )
 
-    async def _run_and_emit(task: TaskSpec) -> tuple[TaskExecutionResult, list]:
+    async def _run_and_emit(task: TaskSpec) -> TaskExecutionResult:
         return await _run_worker(
             task, tools_by_name, settings,
             current_round=current_round,
@@ -230,14 +261,10 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
         )
 
     t0_all = time.perf_counter()
-    worker_outputs: list[tuple[TaskExecutionResult, list]] = list(
+    new_results: list[TaskExecutionResult] = list(
         await asyncio.gather(*[_run_and_emit(t) for t in fresh_tasks])
     )
     total_elapsed = time.perf_counter() - t0_all
-
-    new_results    = [r for r, _ in worker_outputs]
-    # 각 워커의 AIMessage(tool_calls) + ToolMessage 쌍 — state.messages에 직접 포함
-    worker_messages = [msg for _, msgs in worker_outputs for msg in msgs]
 
     logger.debug(
         "[EXEC] done  %.2fs\n%s",
@@ -249,33 +276,17 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
         ),
     )
 
-    # 구조화된 요약 AIMessage — multi-turn에서 extract_results_from_messages가 파싱하는 마커
-    msg_data = [
-        {
-            "task_id":          r["task_id"],
-            "task_description": r["task_description"],
-            "round":            r["round"],
-            "tool_calls": [
-                {
-                    "tool_name":   tc["tool_name"],
-                    "result_text": tc["result_text"],
-                    "summary":     tc["summary"],
-                    "is_error":    tc["is_error"],
-                }
-                for tc in r["tool_calls"]
-            ],
-        }
-        for r in new_results
-    ]
+    # 정제된 라운드 요약만 공유 컨텍스트에 올림 — raw 도구 트래픽은 워커에 격리,
+    # 전체 result_text는 task_execution_results에 단일 보관 (generate가 직접 사용)
     summary_message = AIMessage(
-        content=json.dumps(msg_data, ensure_ascii=False),
+        content=_format_round_results(new_results),
         name="tool_results",
     )
 
     accumulated = list(state.get("task_execution_results", [])) + new_results
 
     return {
-        "messages":               worker_messages + [summary_message],
+        "messages":               [summary_message],
         "task_execution_results": accumulated,
         "pending_tasks":          [],
     }

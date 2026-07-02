@@ -1,15 +1,39 @@
 import logging
 import re
 import time
-from langchain_core.messages import SystemMessage, AIMessage, RemoveMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from common.llm import get_llm
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState
+from agent.utils.context import split_turns, previous_turn_context
 from config import get_settings
-from memory.compaction import should_compact, compact_messages
+from memory.compaction import apply_compaction
 
 logger = logging.getLogger(__name__)
+
+
+def _format_collected_data(task_execution_results: list) -> str:
+    """task_execution_results → generate 컨텍스트용 데이터 블록.
+
+    비에러 tool result의 정제된 result_text(clean_tool_result 산출물)만 태스크별로 묶고,
+    동일 result_text는 한 번만 포함한다.
+    """
+    blocks: list[str] = []
+    seen: set[str] = set()
+    for r in task_execution_results:
+        parts: list[str] = []
+        for tc in r.get("tool_calls", []):
+            if tc.get("is_error"):
+                continue
+            text = tc.get("result_text", "")
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            parts.append(text)
+        if parts:
+            blocks.append(f"### {r.get('task_description', '')}\n" + "\n".join(parts))
+    return "\n\n".join(blocks)
 
 
 async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
@@ -24,29 +48,39 @@ async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
     model = RequestConfig.current().generate_model or settings.rnd_model
     llm = get_llm(model=model, streaming=True)
 
-    messages = list(state["messages"])
-    approx_tokens = sum(len(str(m.content)) // 4 for m in messages)
-    compaction_msgs: list = []
-    if should_compact(messages, approx_tokens):
-        llm_plain = get_llm(model=RequestConfig.current().compact_model or settings.rnd_model)
-        compacted = await compact_messages(messages, llm_plain)
-        kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
-        compaction_msgs = [RemoveMessage(id=m.id) for m in messages if getattr(m, "id", None) and m.id not in kept_ids]
-        compaction_msgs.append(compacted[0])
-        messages = compacted
+    messages, compaction_msgs = await apply_compaction(
+        list(state["messages"]),
+        get_llm(model=RequestConfig.current().compact_model or settings.rnd_model),
+    )
 
-    # orchestrator(계획 메타데이터)·tool_results(JSON 마커) 제외 — AIMessage(tool_calls)+ToolMessage 쌍은 그대로 포함
-    relevant = [m for m in messages if getattr(m, "name", None) not in ("tool_results", "orchestrator")]
+    # 턴 경계 분리: 이전 턴은 질문·최종답변만 유지, 현재 턴 데이터는
+    # task_execution_results에서 HumanMessage로 구성 (Human→AI 교차 구조 보장)
+    prev_turns, current_turn = split_turns(messages)
+    history = previous_turn_context(prev_turns)
+
+    current_humans = [m for m in current_turn if isinstance(m, HumanMessage)]
+    if current_humans:
+        *lead, last_human = current_humans
+    else:
+        lead, last_human = [], HumanMessage(content=RequestConfig.current().original_query)
+
+    data_block = _format_collected_data(state.get("task_execution_results", []))
+    if data_block:
+        last_human = HumanMessage(
+            content=f"<수집된 데이터>\n{data_block}\n</수집된 데이터>\n\n[질문]\n{last_human.content}"
+        )
+    relevant = history + lead + [last_human]
 
     system_prompt = """<role>
 You are an R&D AI assistant. Answer in Korean.
 </role>
 
 <instructions>
-Answer the user's question using only the provided data.
+Answer the user's question using only the data inside <수집된 데이터> and, for follow-up questions, facts stated in your own previous answers in this conversation.
 
 Never introduce any people, organizations, projects, papers, numbers, or facts that are not present in the provided data.
 
+If there is no <수집된 데이터> block and the question asks for a definition or explanation of a general R&D term or concept, give a brief factual explanation from general knowledge.
 If the provided data does not contain information that answers the user's question, respond with "관련 정보를 찾을 수 없습니다."
 Otherwise, answer using only the available information without filling in missing parts.
 
@@ -74,19 +108,10 @@ Do not add background information, related topics, or additional entities.
 </constraints>
 """
 
-    def _fmt_ctx(m) -> str:
-        name = getattr(m, "name", None)
-        if getattr(m, "tool_calls", None):
-            calls = ", ".join(tc["name"] for tc in m.tool_calls[:5])
-            return f"  [tool_calls×{len(m.tool_calls)}] {calls}"
-        if getattr(m, "tool_call_id", None):
-            content = str(m.content)
-            return f"  [tool_result] {content[:80]}{'…' if len(content) > 80 else ''}"
-        label = name or type(m).__name__.replace("Message", "").lower()
-        return f"  [{label}] {str(m.content)}"
-
-    ctx_lines = "\n".join(_fmt_ctx(m) for m in relevant)
-    logger.debug("[GEN] context=%d msgs\n%s", len(relevant), ctx_lines)
+    logger.debug(
+        "[GEN] context=%d msgs (history=%d)  data=%d chars",
+        len(relevant), len(history), len(data_block),
+    )
 
     t0 = time.perf_counter()
     chunks: list[str] = []

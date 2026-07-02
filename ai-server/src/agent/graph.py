@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from agent.state import RDAgentState
 from agent.nodes.orchestrator import orchestrator
 from agent.nodes.parallel_executor import parallel_executor
-from agent.nodes.generate import generate
+from agent.nodes.generator import generate
 from agent.edges.should_continue import should_continue
 
 

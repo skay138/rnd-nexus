@@ -23,6 +23,7 @@ class TaskExecutionResult(TypedDict):
     round: int         # 실행 시점의 iteration_count
     status: str        # "completed" | "empty" | "error"
     tool_calls: list[ToolCallRecord]
+    worker_note: str   # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
 
 
 class RDAgentState(TypedDict):

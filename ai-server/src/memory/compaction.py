@@ -2,13 +2,42 @@ import ast
 import json
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 
-COMPACTION_THRESHOLD = 24_000
+COMPACTION_THRESHOLD = 24_000  # 추정 토큰 기준
 
 
-def should_compact(messages: list[Any], token_count: int) -> bool:
-    return token_count > COMPACTION_THRESHOLD
+def estimate_tokens(messages: list[Any]) -> int:
+    """한국어 위주 텍스트의 보수적 토큰 추정 (약 2자/토큰).
+
+    영문 기준 4자/토큰 추정은 한국어에서 실제 토큰 수를 크게 과소평가해
+    컨텍스트 오버플로 전에 압축이 트리거되지 않는 문제가 있다.
+    """
+    return sum(len(str(m.content)) for m in messages) // 2
+
+
+def should_compact(messages: list[Any]) -> bool:
+    return estimate_tokens(messages) > COMPACTION_THRESHOLD
+
+
+async def apply_compaction(messages: list[Any], llm: Any) -> tuple[list[Any], list[Any]]:
+    """임계 초과 시 압축을 수행한다.
+
+    반환: (이번 LLM 호출에 사용할 메시지 목록,
+           state["messages"]에 반영할 연산 목록 — RemoveMessage들 + 압축 요약.
+           압축 불필요 시 빈 목록)
+    """
+    if not should_compact(messages):
+        return messages, []
+    compacted = await compact_messages(messages, llm)
+    kept_ids = {m.id for m in compacted if getattr(m, "id", None)}
+    ops: list[Any] = [
+        RemoveMessage(id=m.id)
+        for m in messages
+        if getattr(m, "id", None) and m.id not in kept_ids
+    ]
+    ops.append(compacted[0])
+    return compacted, ops
 
 
 async def compact_messages(messages: list[Any], llm: Any) -> list[Any]:
@@ -44,6 +73,7 @@ async def _compress_to_summary(messages: list[Any], llm: Any) -> str:
     prompt = f"""Summarize the following R&D agent session into a structured handoff document.
 The summary replaces the full conversation history — the agent must be able to continue work from it alone.
 Write in Korean. Be specific: include exact IDs and names, not just counts.
+Be concise — bullet lists only, no prose paragraphs.
 
 Output the following sections (omit a section if not applicable):
 
@@ -75,7 +105,10 @@ Output the following sections (omit a section if not applicable):
 
 
 def _format_for_compact(messages: list[Any]) -> str:
-    """압축 프롬프트용 메시지 포맷 — ToolMessage는 요약본, AIMessage(tool_calls)는 호출 목록."""
+    """압축 프롬프트용 메시지 포맷.
+
+    ToolMessage/tool_calls 분기는 구버전 체크포인트(raw 도구 메시지 잔존) 호환용.
+    """
     lines = []
     for m in messages:
         name = getattr(m, "name", None)
@@ -92,7 +125,8 @@ def _format_for_compact(messages: list[Any]) -> str:
             lines.append(f"[도구 호출] {', '.join(calls)}")
 
         elif name == "tool_results":
-            lines.append("[라운드 수집 완료]")
+            # 내용이 이미 태스크별 요약 텍스트 — 압축 요약이 ID·엔티티명을 보존하도록 포함
+            lines.append(str(m.content)[:800])
 
         elif name == "orchestrator":
             lines.append(f"[오케스트레이터 태스크]\n{str(m.content)[:300]}")

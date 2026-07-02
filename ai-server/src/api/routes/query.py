@@ -182,7 +182,11 @@ async def _stream_events(
                 )
                 if orch_msg:
                     raw_content = str(orch_msg.content)
-                    reasoning_only = raw_content.split("\n\n[계획한 태스크]")[0].split("\n\n[수집 완료")[0]
+                    # reasoning 뒤의 상태 마커·태스크 목록 제거 (tasks는 별도 필드로 전송)
+                    reasoning_only = raw_content
+                    for marker in ("[계획한 태스크]", "[수집 완료", "[범위 외"):
+                        reasoning_only = reasoning_only.split(marker)[0]
+                    reasoning_only = reasoning_only.strip()
                     yield json.dumps({
                         "type":      "orchestrator",
                         "round":     iteration_count,

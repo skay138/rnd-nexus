@@ -59,7 +59,8 @@ def clean_tool_result(result_str: str) -> str:
                 entities.append(data)
         else:
             entities.append(item)
-    return json.dumps(entities, ensure_ascii=False, indent=2) if entities else result_str
+    # compact JSON — generate 컨텍스트 토큰 절약 (indent 불필요)
+    return json.dumps(entities, ensure_ascii=False) if entities else result_str
 
 
 def summarize_tool_result(result_str: str) -> str:
