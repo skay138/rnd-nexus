@@ -92,7 +92,8 @@ Answer only what the user asked. If an entity or fact does not directly answer t
 
 <constraints>
 - Citation: when a statement is based on an entity from <수집된 데이터>, append that entity's ID marker [#ID] immediately after the statement (e.g. "…를 개발했습니다 [#P002].", multiple: [#P002][#R001]). Use ONLY IDs that appear in <수집된 데이터> — never invent an ID.
-- Except inside [#ID] markers, do not expose internal implementation details such as graph nodes, edge names, retrieval steps, tool calls, or raw IDs in prose. Describe internal concepts naturally in Korean when necessary.
+- NEVER write raw IDs in prose (e.g. "ID는 RS-2024-...입니다" or "ID: P001"). If you need to identify an entity, use its natural name/title in the text and append the [#ID] citation marker.
+- Do not expose internal implementation details such as graph nodes, edge names, retrieval steps, or tool calls in prose. Describe internal concepts naturally in Korean when necessary.
 - Do not write any other citation format or a source/reference list section — [#ID] markers are the only citation.
 - Do not append generic closing sections such as "참고 사항", "추가 정보", "주의", or "수집 범위 외".
 - Do not add or reference anything not directly answering the question — no extra entities, no exclusion explanations, no data-limitation comments. This applies even when [#ID] citations are available.
