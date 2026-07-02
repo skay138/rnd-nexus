@@ -1,6 +1,41 @@
 import ast
 import json
+import re
 from typing import Any
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def strip_think(text: str) -> str:
+    """추론 모델의 <think> 블록 제거.
+
+    닫히지 않은 <think>(토큰 한도로 잘린 응답)는 태그 이후 전체를 제거한다.
+    """
+    text = _THINK_RE.sub("", text)
+    if "<think>" in text:
+        text = text.split("<think>", 1)[0]
+    return text.strip()
+
+
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL)
+
+
+def strip_code_fence(s: str) -> str:
+    """```json ... ``` 래핑 제거."""
+    s = s.strip()
+    m = _CODE_FENCE_RE.match(s)
+    return m.group(1).strip() if m else s
+
+
+_ENTITY_ID_KEYS = (
+    "id", "entity_id", "paper_id", "patent_id", "researcher_id",
+    "tech_id", "technology_id", "project_id", "org_id",
+)
+
+
+def entity_ids(d: dict) -> list[str]:
+    """entity dict에서 식별 가능한 모든 ID 값을 추출."""
+    return [str(d[k]) for k in _ENTITY_ID_KEYS if d.get(k)]
 
 
 def try_parse(s: str) -> Any:

@@ -618,6 +618,77 @@
       return line.replace(/^\||\|$/g, "").split("|");
     }
 
+    function listMarker(line) {
+      var m = line.match(/^(\s*)(?:([-*])|(\d+)[.)])\s+(.+)$/);
+      if (!m) return null;
+      return {
+        indent:  m[1].length,
+        ordered: !!m[3],
+        num:     m[3] ? parseInt(m[3], 10) : 0,
+        text:    m[4]
+      };
+    }
+
+    // 들여쓰기 스택 기반 리스트 파서 — 중첩·번호 유지(start)·빈 줄·연속 줄 지원
+    function renderListBlock(lines, i) {
+      var html  = "";
+      var stack = [];   // {indent, ordered, liOpen}
+
+      function top()     { return stack[stack.length - 1]; }
+      function closeLi() { if (top().liOpen) { html += "</li>"; top().liOpen = false; } }
+      function openList(m) {
+        html += m.ordered ? (m.num > 1 ? '<ol start="' + m.num + '">' : "<ol>") : "<ul>";
+        stack.push({ indent: m.indent, ordered: m.ordered, liOpen: false });
+      }
+      function closeList() {
+        closeLi();
+        html += stack.pop().ordered ? "</ol>" : "</ul>";
+      }
+
+      openList(listMarker(lines[i]));
+
+      while (i < lines.length) {
+        var line = lines[i];
+
+        if (line.trim() === "") {
+          // 빈 줄: 다음 내용 줄이 리스트 항목이면 계속, 아니면 리스트 종료
+          var j = i + 1;
+          while (j < lines.length && lines[j].trim() === "") j++;
+          if (j < lines.length && listMarker(lines[j])) { i = j; continue; }
+          break;
+        }
+
+        var m = listMarker(line);
+        if (m) {
+          while (stack.length > 1 && m.indent < top().indent) closeList();
+          if (m.indent > top().indent && top().liOpen) {
+            openList(m);                       // 중첩 리스트 (열린 li 내부)
+          } else if (m.ordered !== top().ordered) {
+            closeList();                       // 같은 레벨에서 ul↔ol 전환
+            openList(m);
+          } else {
+            closeLi();
+          }
+          html += "<li>" + inlineRender(escHtml(m.text));
+          top().liOpen = true;
+          i++;
+          continue;
+        }
+
+        // 마커 없는 들여쓰기 줄 → 직전 항목의 연속 줄
+        if (/^\s+\S/.test(line) && top().liOpen) {
+          html += "<br>" + inlineRender(escHtml(line.trim()));
+          i++;
+          continue;
+        }
+
+        break;   // 리스트 블록 종료
+      }
+
+      while (stack.length > 0) closeList();
+      return { html: html, next: i };
+    }
+
     function renderMarkdown(text) {
       var lines = text.split("\n");
       var html  = "";
@@ -666,42 +737,12 @@
           html += "<hr>"; i++; continue;
         }
 
-        // unordered list (collect block)
-        if (/^[-*]\s+/.test(line)) {
-          html += "<ul>";
-          while (i < lines.length) {
-            var m = lines[i].match(/^[-*]\s+(.+)/);
-            if (!m) break;
-            html += "<li>" + inlineRender(escHtml(m[1])) + "</li>"; i++;
-          }
-          html += "</ul>"; continue;
-        }
-
-        // ordered list (collect block)
-        if (/^\d+\.\s+/.test(line)) {
-          html += "<ol>";
-          while (i < lines.length) {
-            if (lines[i].trim() === "") { i++; continue; }
-            var om = lines[i].match(/^\d+\.\s+(.+)/);
-            if (!om) break;
-            i++;
-            var itemHtml = inlineRender(escHtml(om[1]));
-            var subItems = [];
-            while (i < lines.length) {
-              if (/^\d+\.\s+/.test(lines[i])) break;
-              if (lines[i].trim() === "") { i++; continue; }
-              var subm = lines[i].match(/^[-*]\s+(.+)/);
-              if (subm) { subItems.push(subm[1]); i++; continue; }
-              break;
-            }
-            if (subItems.length > 0) {
-              itemHtml += "<ul>" + subItems.map(function(s) {
-                return "<li>" + inlineRender(escHtml(s)) + "</li>";
-              }).join("") + "</ul>";
-            }
-            html += "<li>" + itemHtml + "</li>";
-          }
-          html += "</ol>"; continue;
+        // list block (ul/ol — 들여쓰기 중첩, 번호 유지, 빈 줄·연속 줄 허용)
+        if (listMarker(line)) {
+          var lst = renderListBlock(lines, i);
+          html += lst.html;
+          i = lst.next;
+          continue;
         }
 
         // blank line

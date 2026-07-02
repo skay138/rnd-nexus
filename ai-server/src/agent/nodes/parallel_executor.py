@@ -10,7 +10,13 @@ from langchain_core.runnables import RunnableConfig
 from agent.state import RDAgentState, TaskSpec, TaskExecutionResult, ToolCallRecord
 from common.config.query_config import RequestConfig
 from common.llm import get_llm
-from common.parsers import clean_tool_result, summarize_tool_result
+from common.parsers import (
+    clean_tool_result,
+    strip_code_fence,
+    strip_think,
+    summarize_tool_result,
+    try_parse,
+)
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -69,6 +75,19 @@ def _format_round_results(results: list[TaskExecutionResult]) -> str:
     return "\n".join(lines)
 
 
+def _parse_worker_final(text: str) -> tuple[str, list[str]]:
+    """워커 최종 응답({"summary", "relevant_ids"} JSON) 파싱.
+
+    JSON이 아니면(모델이 평문으로 답한 경우) 원문을 보고로, 선별 없음으로 처리.
+    """
+    data = try_parse(strip_code_fence(text))
+    if isinstance(data, dict):
+        summary = str(data.get("summary", "")).strip()
+        ids = [str(i) for i in data.get("relevant_ids") or [] if i]
+        return (summary or text), ids
+    return text, []
+
+
 async def _run_worker(
     task: TaskSpec,
     tools_by_name: dict[str, Any],
@@ -86,7 +105,8 @@ async def _run_worker(
     task_id = task["id"]
     task_description = task["description"]
     tool_calls: list[ToolCallRecord] = []
-    worker_note = ""   # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
+    worker_note = ""                  # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
+    selected_ids: list[str] = []      # 워커가 선별한 태스크 관련 엔티티 ID
 
     llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
@@ -100,7 +120,9 @@ You are an R&D data collection worker. Collect the requested data by calling too
 - After obtaining IDs from a search, call detail-retrieval tools to collect affiliation, specialty, abstract, and other detailed fields.
 - Stop when sufficient data is collected or there is nothing more to retrieve.
 - If [Completed tasks from previous rounds] is provided, do not repeat the same searches.
-- When you finish, reply with ONE short Korean line reporting what was collected or why nothing was found (e.g. "논문 3건과 저자 상세 정보 수집 완료", "관련 특허 검색 결과 없음"). No analysis or interpretation.
+- When you finish, reply with ONLY this JSON object (no other text):
+  {"summary": "한 줄 보고 — 무엇을 수집했는지 또는 왜 찾지 못했는지 (Korean)", "relevant_ids": ["ID1", "ID2"]}
+- relevant_ids: IDs of entities DIRECTLY relevant to [태스크], chosen only from IDs that appeared in tool results — never invent IDs. Exclude unrelated or only tangentially related entities. Empty list if nothing relevant.
 </instructions>""")
 
     task_content = (
@@ -120,10 +142,13 @@ You are an R&D data collection worker. Collect the requested data by calling too
             messages.append(response)
 
             if not getattr(response, "tool_calls", None):
-                worker_note = str(response.content).strip()
+                worker_note, selected_ids = _parse_worker_final(
+                    strip_think(str(response.content))
+                )
                 logger.debug(
-                    "[WORKER] %-38s  ✓ done  %d steps  %d tools  note=%s",
-                    f'"{task_description[:35]}"', step + 1, len(tool_calls), worker_note[:60],
+                    "[WORKER] %-38s  ✓ done  %d steps  %d tools  selected=%d  note=%s",
+                    f'"{task_description[:35]}"', step + 1, len(tool_calls),
+                    len(selected_ids), worker_note[:60],
                 )
                 break
 
@@ -193,6 +218,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
             "status":           status,
             "tool_calls":       tool_calls,
             "worker_note":      worker_note,
+            "selected_ids":     selected_ids,
         }
         return result
 
@@ -211,6 +237,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
                 "is_error":    True,
             }],
             "worker_note":      "",
+            "selected_ids":     [],
         }
         return err_result
 

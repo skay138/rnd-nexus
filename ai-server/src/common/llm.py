@@ -1,7 +1,7 @@
 import logging
-import re
 from typing import Any
 from langchain_core.language_models import BaseChatModel
+from common.parsers import strip_think
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -68,5 +68,4 @@ async def llm_ainvoke(llm: BaseChatModel, messages: list, config: Any = None) ->
     chunks: list[str] = []
     async for chunk in llm.astream(messages):
         chunks.append(chunk.content if isinstance(chunk.content, str) else "")
-    full = "".join(chunks)
-    return re.sub(r"<think>.*?</think>", "", full, flags=re.DOTALL).strip()
+    return strip_think("".join(chunks))
