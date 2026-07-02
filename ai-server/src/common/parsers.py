@@ -38,6 +38,18 @@ def entity_ids(d: dict) -> list[str]:
     return [str(d[k]) for k in _ENTITY_ID_KEYS if d.get(k)]
 
 
+def extract_tool_error(result_str: str) -> str | None:
+    """MCP 도구가 [{"error": ...}] 행 형태로 반환한 오류 메시지를 추출 — 정상 결과면 None.
+
+    MCP 도구들은 예외 대신 error 행을 반환하므로, [ERROR] 접두어 기반 판정만으로는
+    이런 오류가 정상 엔티티로 오인되어 generate 컨텍스트까지 유입된다.
+    """
+    entities = list(iter_entities(result_str))
+    if entities and all(isinstance(e, dict) and "error" in e for e in entities):
+        return "; ".join(str(e["error"]) for e in entities[:3])
+    return None
+
+
 def collect_relevant_data(task_execution_results: list) -> list[dict]:
     """generate 컨텍스트에 포함할 데이터를 태스크별로 선별한다.
 

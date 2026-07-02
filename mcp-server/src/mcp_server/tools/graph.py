@@ -1,6 +1,7 @@
 """MCP 도구: 그래프 탐색 (Neo4j)"""
 from __future__ import annotations
 import logging
+import re
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -35,13 +36,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
             researcher_id:   연구자 ID (예: 'R006') — 정확 매칭, 동명이인 방지
 
         Returns:
-            [{type, id, name, ...relation_fields}, ...]
-            type: "researcher" | "paper" | "patent" | "technology" | "organization"
-            researcher: researcher_id, name, affiliation, h_index, specialty
-            paper:      paper_id, title, year, citations
-            patent:     patent_id, title, year
-            technology: tech_id, name
-            organization: org_id, name
+            [{name, researcher_id, papers, patents, organization, technologies}, ...]
+            researcher_id 매칭 시 1행, 이름 부분 일치 시 최대 10행 (동명이인 각 1행)
+            papers/patents: [{id, title}] 최대 5건 — id는 get_entities·get_citation_graph에 사용 가능
+            organization: 소속 기관명, technologies: 연구 기술명 목록
+            연구자의 h_index·specialty 등 상세 필드는 get_entities(Researcher)로 조회하세요
         """
         fn = repository_factory.get_researcher_network_fn()
         if fn is None:
@@ -122,11 +121,11 @@ def register_graph_tools(mcp: FastMCP) -> None:
         if fn is None:
             return [{"error": "Neo4j 미설정 — NEO4J_URI 환경변수를 확인하세요."}]
 
-        _WRITE_KEYWORDS = {"CREATE", "MERGE", "DELETE", "DETACH", "SET", "REMOVE", "DROP", "CALL"}
-        if any(kw in cypher.upper() for kw in _WRITE_KEYWORDS):
+        # 단어 경계 매칭 — 'Dataset'(SET), 'Recall'(CALL) 등 제목 문자열의 부분 일치 오차단 방지.
+        # 따옴표 안 문자열의 단독 키워드는 여전히 차단될 수 있으나 READ 전용 보장을 우선한다.
+        if re.search(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|CALL)\b", cypher.upper()):
             return [{"error": "쓰기 작업 차단. MATCH/RETURN 전용 쿼리만 허용됩니다."}]
 
-        import re
         unknown = [
             m for m in re.findall(r"\[:([A-Z_]+)\]", cypher)
             if m not in _NEO4J_RELATIONS
@@ -134,6 +133,10 @@ def register_graph_tools(mcp: FastMCP) -> None:
         if unknown:
             valid = ", ".join(sorted(_NEO4J_RELATIONS))
             return [{"error": f"알 수 없는 관계 타입: {unknown}. 유효: {valid}"}]
+
+        # docstring의 'LIMIT 필수'를 코드로 보장 — 누락 시 자동 부여
+        if not re.search(r"\bLIMIT\b", cypher, re.IGNORECASE):
+            cypher = f"{cypher.rstrip().rstrip(';')} LIMIT 50"
 
         try:
             return fn(cypher)

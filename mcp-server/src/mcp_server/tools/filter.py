@@ -27,14 +27,15 @@ def register_filter_tools(mcp: FastMCP) -> None:
         - "최근 3년 AI 반도체 과제": entity_type="Project", year_from=2022, year_to=2024
         - "ETRI 소속 연구자 목록": entity_type="Researcher", organization="ETRI"
         - "진행 중인 과제만": entity_type="Project", status="진행중"
-        - semantic_search와 병행: 키워드 검색으로 ID 수집 후 연도/상태로 추가 필터링
         </instructions>
 
         <constraints>
         - entity_type: Paper / Patent / Researcher / Technology / Project / Organization
+        - 타입별 지원 필터 (지원하지 않는 파라미터는 무시됨):
+          Paper=연도 / Patent=연도+organization(출원인) / Project=연도+organization+status
+          Researcher=organization(소속 기관) / Organization=organization(기관명) / Technology=필터 없음(전체 목록)
         - year_from=0이면 하한 없음, year_to=0이면 상한 없음
-        - organization은 부분 문자열 매칭 (기관명)
-        - status 필터는 Project에만 의미 있음 (예: "진행중", "완료")
+        - organization은 부분 문자열 매칭 — 기관명만 가능, 사람 이름 검색 불가(연구자 이름은 semantic_search 사용)
         </constraints>
 
         Args:

@@ -27,7 +27,7 @@ register_vector_tools(mcp)        # semantic_search
 register_vector_graph_tools(mcp)  # semantic_graph_search
 register_entity_tools(mcp)        # get_entities (ID 기반 상세 조회)
 register_graph_tools(mcp)         # get_researcher_network, get_citation_graph, run_graph_query
-register_filter_tools(mcp)        # search_by_filter (연도·기관·상태 필터)
+register_filter_tools(mcp)        # filter_entities (연도·기관·상태 필터)
 
 
 _FIXTURE_META = [

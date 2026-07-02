@@ -52,20 +52,18 @@ def make_fetch_researcher_network_fn(driver: Any) -> Any:
             where_clause = "WHERE r.name CONTAINS $name"
             params = {"name": researcher_name}
             limit = 10
+        # 패턴 컴프리헨션 — OPTIONAL MATCH 조합의 카티전 곱 없이 관계별 수집.
+        # papers/patents는 후속 조회(get_entities 등)가 가능하도록 id를 함께 반환.
         cypher = f"""
             MATCH (r:Researcher)
             {where_clause}
-            OPTIONAL MATCH (r)-[:AUTHORED]->(p:Paper)
-            OPTIONAL MATCH (r)-[:INVENTED]->(pat:Patent)
-            OPTIONAL MATCH (r)-[:WORKS_AT]->(org:Organization)
-            OPTIONAL MATCH (r)-[:RESEARCHES]->(t:Technology)
             RETURN
-                r.name   AS researcher,
-                r.id     AS researcher_id,
-                collect(DISTINCT p.title)[..5]   AS papers,
-                collect(DISTINCT pat.title)[..5] AS patents,
-                org.name AS organization,
-                collect(DISTINCT t.name)[..10]   AS technologies
+                r.name AS name,
+                r.id   AS researcher_id,
+                [(r)-[:AUTHORED]->(p:Paper)    | {{id: p.id, title: p.title}}][..5]   AS papers,
+                [(r)-[:INVENTED]->(pat:Patent) | {{id: pat.id, title: pat.title}}][..5] AS patents,
+                [(r)-[:WORKS_AT]->(org:Organization) | org.name][0] AS organization,
+                [(r)-[:RESEARCHES]->(t:Technology)   | t.name][..10] AS technologies
             LIMIT {limit}
         """
         with driver.session() as session:

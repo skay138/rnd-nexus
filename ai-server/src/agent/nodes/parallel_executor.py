@@ -13,6 +13,7 @@ from common.llm import get_llm
 from common.parsers import (
     clean_tool_result,
     entity_ids,
+    extract_tool_error,
     iter_entities,
     strip_code_fence,
     strip_think,
@@ -23,8 +24,7 @@ from config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_WORKER_MAX_STEPS = 5
-
+_WORKER_MAX_STEPS = 10
 
 def _build_history_summary(task_execution_results: list[dict]) -> str:
     """이전 라운드 완료 태스크·결과 요약 — 워커 중복 수집 방지용."""
@@ -206,6 +206,9 @@ async def _enrich_selected_entities(
         except Exception as e:
             result_str = f"[ERROR] get_entities 실패: {type(e).__name__}: {e}"
         elapsed = time.perf_counter() - t0
+        tool_err = extract_tool_error(result_str)
+        if tool_err:
+            result_str = f"[ERROR] get_entities: {tool_err}"
         summary = summarize_tool_result(result_str)
         tool_calls.append({
             "tool_name":   "get_entities",
@@ -267,7 +270,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
 
 <instructions>
 - [태스크] is the top priority. Use [원본 질문] only as supplementary context when keywords are missing or pronouns are used.
-- Select tools autonomously based on the task. If sufficient IDs are obtained from search, consider calling a detail-retrieval tool to collect full fields (affiliation, abstract, etc.).
+- If the task requires investigating entities (e.g., looking up authors, affiliations, details) and you only found their IDs, you MUST call a detail-retrieval tool (e.g., `get_entities`) on those IDs to fetch their actual data BEFORE finishing. Do not just return the IDs.
 - If [태스크] filters by specific fields (year, affiliation, status, etc.) that are not visible in search results, call a detail-retrieval tool BEFORE deciding relevant_ids.
 - Determine the correct entity_type for tools based on the explicit context in [태스크] (e.g., 논문=Paper, 연구자=Researcher, 과제=Project, 기관=Organization, 기술=Technology, 특허=Patent).
 - Stop when sufficient data is collected or all reasonable retrieval paths are exhausted.
@@ -328,6 +331,11 @@ You are an R&D data collection worker. Collect the requested data by calling too
                 except Exception as e:
                     result_str = f"[ERROR] {tool_name} 실패: {type(e).__name__}: {e}"
                 elapsed = time.perf_counter() - t0
+
+                # MCP 도구의 [{"error": ...}] 행을 [ERROR] 문자열로 정규화 — is_error 판정 일원화
+                tool_err = extract_tool_error(result_str)
+                if tool_err:
+                    result_str = f"[ERROR] {tool_name}: {tool_err}"
 
                 result_text = clean_tool_result(result_str)
                 summary = summarize_tool_result(result_str)

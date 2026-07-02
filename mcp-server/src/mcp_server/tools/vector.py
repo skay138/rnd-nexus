@@ -34,8 +34,9 @@ def register_vector_tools(mcp: FastMCP) -> None:
         </instructions>
 
         <constraints>
-        - Milvus 미설정 시 에러 반환 — 연도/기관 필터만 필요하면 search_by_filter를 사용하세요
+        - Milvus 미설정 시 에러 반환 — 연도/기관 필터만 필요하면 filter_entities를 사용하세요
         - keyword_weight + (1 - keyword_weight) = 1.0 (합산 자동 보정)
+        - score 0.3 미만 결과는 자동 제외 — 결과가 없으면 다른 키워드·표현으로 재시도하세요
         </constraints>
 
         Args:
