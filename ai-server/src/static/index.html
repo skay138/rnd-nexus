@@ -111,41 +111,51 @@
 
     /* ── Markdown ────────────────────────────────────────────────── */
     sup.cite {
-      color: #a78bfa;
-      font-size: .72em;
-      margin-left: 1px;
-      white-space: nowrap;
-      cursor: default;
-      position: relative;
-    }
-    sup.cite .cite-tooltip {
-      display: none;
-      position: absolute;
-      bottom: calc(100% + 5px);
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1a1d2e;
-      border: 1px solid #2d3158;
-      border-radius: 6px;
-      padding: 0.35rem 0.65rem;
-      white-space: nowrap;
-      z-index: 9999;
-      pointer-events: none;
-      font-size: 0.78rem;
-      font-weight: normal;
-      line-height: 1.5;
-      box-shadow: 0 4px 16px #00000055;
-    }
-    sup.cite .cite-tooltip .tt-type {
-      font-size: 0.68rem;
+      color: #c4b5fd;
+      font-size: 0.7em;
       font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      opacity: 0.65;
-      margin-bottom: 0.1rem;
+      margin-left: 2px;
+      white-space: nowrap;
+      cursor: pointer;
+      position: relative;
+      display: inline-block;
+      background: #2d1f5e44;
+      border: 1px solid #7c3aed55;
+      border-radius: 4px;
+      padding: 0 3px;
+      vertical-align: super;
+      transition: background 0.15s, border-color 0.15s;
     }
-    sup.cite .cite-tooltip .tt-title { color: #e2e8f0; }
-    sup.cite:hover .cite-tooltip { display: block; }
+    sup.cite:hover {
+      background: #7c3aed33;
+      border-color: #a78bfa99;
+    }
+    /* ── Cite global tooltip ─────────────────────────────────────── */
+    #cite-tooltip {
+      display: none;
+      position: fixed;
+      background: #1a1d2e;
+      border: 1px solid #3730a3;
+      border-radius: 8px;
+      padding: 0.45rem 0.75rem;
+      z-index: 99999;
+      pointer-events: none;
+      font-size: 0.8rem;
+      font-weight: normal;
+      line-height: 1.55;
+      box-shadow: 0 6px 24px #00000077;
+      max-width: 420px;
+      min-width: 120px;
+    }
+    #cite-tooltip .tt-type {
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 0.15rem;
+    }
+    #cite-tooltip .tt-title { color: #e2e8f0; word-break: break-word; white-space: normal; }
     .msg-body h1 { color: #f0f4ff; font-size: 1.4rem;  font-weight: 700; margin: 1.2rem 0 0.4rem; }
     .msg-body h2 { color: #f0f4ff; font-size: 1.18rem; font-weight: 700; margin: 1.1rem 0 0.35rem; border-bottom: 1px solid #1e2235; padding-bottom: 0.2rem; }
     .msg-body h3 { color: #f0f4ff; font-size: 1.05rem; font-weight: 600; margin: 1rem 0 0.3rem; }
@@ -802,6 +812,62 @@
       Paper: "#60a5fa", Patent: "#fb923c", Researcher: "#4ade80",
       Technology: "#a78bfa", Project: "#facc15", Organization: "#94a3b8"
     };
+
+
+    // ── 전역 tooltip div — <html>에 직접 append (body/chat overflow clip 완전 차단) ──
+    var _citeTooltipEl = (function() {
+      var el = document.createElement("div");
+      el.id = "cite-tooltip";
+      el.innerHTML = '<div class="tt-type"></div><div class="tt-title"></div>';
+      document.documentElement.appendChild(el);
+      return el;
+    })();
+
+
+    function _showTooltip(sup) {
+      var typeColor = TYPE_COLORS[sup.dataset.citeType] || "#a78bfa";
+      _citeTooltipEl.querySelector(".tt-type").textContent = sup.dataset.citeType || "";
+      _citeTooltipEl.querySelector(".tt-type").style.color = typeColor;
+      _citeTooltipEl.querySelector(".tt-title").textContent = sup.dataset.citeTitle || "";
+
+      // visibility:hidden으로 렌더링해 실제 크기 측정 후 위치 결정 (fallback 불필요)
+      _citeTooltipEl.style.visibility = "hidden";
+      _citeTooltipEl.style.display = "block";
+
+      var rect = sup.getBoundingClientRect();
+      var ttW  = _citeTooltipEl.offsetWidth;
+      var ttH  = _citeTooltipEl.offsetHeight;
+      var vpW  = window.innerWidth;
+      var vpH  = window.innerHeight;
+      var GAP  = 6;
+
+      // 기본: 요소 위에 붙임
+      var x = rect.left;
+      var y = rect.top - ttH - GAP;
+
+      // 수평 클리핑 방지
+      if (x + ttW > vpW - 8) x = vpW - ttW - 8;
+      if (x < 8)              x = 8;
+
+      // 위쪽 공간 없으면 아래로
+      if (y < 8) y = rect.bottom + GAP;
+
+      _citeTooltipEl.style.left = x + "px";
+      _citeTooltipEl.style.top  = y + "px";
+      _citeTooltipEl.style.visibility = "visible";
+    }
+
+    document.addEventListener("mouseover", function(e) {
+      var sup = e.target.closest("sup.cite[data-cite-title]");
+      if (sup) _showTooltip(sup);
+      else _citeTooltipEl.style.display = "none";
+    });
+
+    document.addEventListener("mouseout", function(e) {
+      if (e.target.closest("sup.cite")) _citeTooltipEl.style.display = "none";
+    });
+
+
     function renderCitations(html, sourceText) {
       var map = citeOverride;
       if (!map) {
@@ -819,14 +885,10 @@
       return html.replace(/\[#([A-Za-z0-9\-_.]+)\]/g, function(_, id) {
         var entry = map[id];
         if (!entry) return "";
-        var typeColor = TYPE_COLORS[entry.type] || "#a78bfa";
-        var tooltipHtml = entry.title
-          ? '<span class="cite-tooltip">'
-            + '<div class="tt-type" style="color:' + typeColor + '">' + escHtml(entry.type || "") + '</div>'
-            + '<div class="tt-title">' + escHtml(entry.title.substring(0, 60) + (entry.title.length > 60 ? "…" : "")) + '</div>'
-            + '</span>'
+        var attrs = entry.title
+          ? ' data-cite-title="' + escHtml(entry.title) + '" data-cite-type="' + escHtml(entry.type || "") + '"'
           : '';
-        return '<sup class="cite">[' + entry.num + ']' + tooltipHtml + '</sup>';
+        return '<sup class="cite"' + attrs + '>[' + entry.num + ']</sup>';
       });
     }
 
