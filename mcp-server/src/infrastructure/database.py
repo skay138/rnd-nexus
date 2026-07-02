@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 _DDL_STATEMENTS = [
+    "DROP TABLE IF EXISTS paper_authors;",
+
     """CREATE TABLE IF NOT EXISTS papers (
         paper_id     VARCHAR(64)  NOT NULL,
         title        TEXT         NOT NULL,
