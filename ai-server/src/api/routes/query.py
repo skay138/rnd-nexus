@@ -80,8 +80,19 @@ def _extract_all_refs(obj: Any) -> list[dict]:
         if ref and ref.get("id"):
             refs.append(ref)
         
-        for v in obj.values():
-            if isinstance(v, (dict, list)):
+        for k, v in obj.items():
+            if k == "authors" and isinstance(v, list):
+                # 논문의 authors 필드 ("R005:박민준" 형태) 파싱
+                for item in v:
+                    if isinstance(item, str) and ":" in item:
+                        parts = item.split(":", 1)
+                        if len(parts) == 2 and parts[0].strip().startswith("R"):
+                            refs.append({
+                                "type": "Researcher",
+                                "id": parts[0].strip(),
+                                "title": parts[1].strip()
+                            })
+            elif isinstance(v, (dict, list)):
                 refs.extend(_extract_all_refs(v))
     elif isinstance(obj, list):
         for item in obj:
@@ -129,7 +140,6 @@ def _build_references(task_execution_results: list, answer_text: str = "") -> li
 @router.post("/agent/query")
 async def agent_query(body: QueryRequest, request: Request) -> Any:
     graph         = request.app.state.graph
-    tools_by_name = request.app.state.tools_by_name
     config_repo   = request.app.state.config_repo
 
     # 설정 우선순위: API 파라미터 > DB > 기본값
@@ -148,7 +158,6 @@ async def agent_query(body: QueryRequest, request: Request) -> Any:
     lg_config: dict[str, Any] = {
         "configurable": {
             "thread_id":     thread_id,
-            "tools_by_name": tools_by_name,
             "max_iterations": resolved.max_iterations,
         },
         "recursion_limit": 50,
@@ -182,8 +191,11 @@ async def _stream_events(
 
     async def _run_graph() -> None:
         try:
-            async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
-                await sse_queue.put(("graph", item))
+            from agent.mcp_client import mcp_server_session, get_llm_and_tools
+            async with mcp_server_session() as session:
+                config["configurable"]["tools_by_name"] = await get_llm_and_tools(session)
+                async for item in graph.astream(initial_state, config, stream_mode=["values", "messages"]):
+                    await sse_queue.put(("graph", item))
         except Exception as e:
             await sse_queue.put(("error", e))
         finally:

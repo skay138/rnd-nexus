@@ -12,7 +12,6 @@ from fastapi.responses import FileResponse
 
 from config import get_settings
 from agent.graph import build_graph
-from agent.mcp_client import mcp_server_session, get_llm_and_tools
 from memory.session import create_memory
 from infrastructure.config_repository import make_config_repo
 from api.routes import health, query, admin, stats
@@ -117,20 +116,15 @@ async def lifespan(app: FastAPI):
         "compact_model":      settings.rnd_model,
     }
     app.state.config_repo     = make_config_repo(settings.mariadb_url, overrides=model_defaults)
-    app.state.mcp_connected   = False
     app.state.redis_connected = False
 
     try:
-        async with mcp_server_session() as session:
-            app.state.mcp_connected = True
-            app.state.tools_by_name = await get_llm_and_tools(session)
-
-            async with create_memory() as memory:
-                app.state.redis_connected = True
-                app.state.graph = build_graph(memory)
-                logger.info("R&D Nexus API 서버 준비 완료 — http://%s:%d",
-                            settings.api_host, settings.api_port)
-                yield
+        async with create_memory() as memory:
+            app.state.redis_connected = True
+            app.state.graph = build_graph(memory)
+            logger.info("R&D Nexus API 서버 준비 완료 — http://%s:%d",
+                        settings.api_host, settings.api_port)
+            yield
 
     except Exception:
         logger.exception("서버 초기화 실패")
