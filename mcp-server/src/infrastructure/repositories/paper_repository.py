@@ -32,7 +32,7 @@ class MariaDBPaperRepository(PaperRepository):
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = f"""
             SELECT p.paper_id, p.title, p.year, p.citations, p.journal, p.abstract,
-                   GROUP_CONCAT(pa.author_name ORDER BY pa.display_order SEPARATOR ', ') AS authors
+                   GROUP_CONCAT(pa.author_id ORDER BY pa.display_order SEPARATOR ', ') AS authors
             FROM papers p
             LEFT JOIN paper_authors pa ON pa.paper_id = p.paper_id
             {where}
@@ -57,7 +57,7 @@ class MariaDBPaperRepository(PaperRepository):
         placeholders = ",".join(["%s"] * len(ids))
         sql = f"""
             SELECT p.paper_id, p.title, p.year, p.citations, p.journal, p.abstract, p.keywords,
-                   GROUP_CONCAT(pa.author_name ORDER BY pa.display_order SEPARATOR ', ') AS authors
+                   GROUP_CONCAT(pa.author_id ORDER BY pa.display_order SEPARATOR ', ') AS authors
             FROM papers p
             LEFT JOIN paper_authors pa ON pa.paper_id = p.paper_id
             WHERE p.paper_id IN ({placeholders})
