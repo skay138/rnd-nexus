@@ -74,24 +74,38 @@ def _is_cited(ref: dict, answer: str) -> bool:
 _CITE_RE = re.compile(r"\[#([A-Za-z0-9\-_.]+)\]")
 
 
-def _build_references(task_execution_results: list, answer_text: str = "") -> list:
-    """출처 목록 생성 — 3단계 우아한 강등.
+def _extract_all_refs(obj: Any) -> list[dict]:
+    refs = []
+    if isinstance(obj, dict):
+        ref = _entity_to_ref(obj)
+        if ref and ref.get("id"):
+            refs.append(ref)
+        
+        for v in obj.values():
+            if isinstance(v, (dict, list)):
+                refs.extend(_extract_all_refs(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, (dict, list)):
+                refs.extend(_extract_all_refs(item))
+    return refs
 
-    후보는 generate가 실제로 본 엔티티(collect_relevant_data — 워커 선별·dedup 동일 규칙).
-    1. 답변의 [#ID] 인용 마커 → 후보 ID와 검증해 정확 매핑 (등장 순서 = 출처 번호).
-       동명이인·다년차 동일 제목 과제도 ID로 구분됨. 환각 마커는 폐기.
-    2. 유효 마커가 없으면 이름·제목 사후 매칭(_is_cited).
-    3. 그래도 없으면 후보 전체 fallback. 단 "관련 정보 없음" 답변은 출처 없음.
-    """
+def _build_references(task_execution_results: list, answer_text: str = "") -> list:
+    """출처 목록 생성 — 3단계 우아한 강등."""
+    from common.parsers import try_parse
     candidates: list = []
     seen: set = set()
     for block in collect_relevant_data(task_execution_results):
         for item in block["items"]:
-            if not isinstance(item, list):
-                continue
-            for d in item:
-                ref = _entity_to_ref(d)
-                if ref and ref["id"] and ref["id"] not in seen:
+            # item may be a list of dicts (entities), or a raw text string
+            obj_to_search = item
+            if isinstance(item, str):
+                parsed = try_parse(item)
+                if parsed is not None:
+                    obj_to_search = parsed
+            
+            for ref in _extract_all_refs(obj_to_search):
+                if ref["id"] and ref["id"] not in seen:
                     seen.add(ref["id"])
                     candidates.append(ref)
 

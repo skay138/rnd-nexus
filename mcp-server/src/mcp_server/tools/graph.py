@@ -92,13 +92,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
         <role>
         Cypher 쿼리를 직접 실행합니다 (Neo4j, MATCH/RETURN READ 전용).
         이미 확보한 ID로 커스텀 탐색이나 집계(COUNT/DISTINCT)가 필요할 때 사용하세요.
-        관계 방향이 헷갈리면 semantic_graph_search를 사용하세요.
         </role>
 
         <instructions>
         - 이미 알고 있는 엔티티 ID로 관계 탐색: run_graph_query 적합
         - 키워드로 엔티티를 찾아야 할 때: semantic_search / semantic_graph_search 사용
         - 기관별 연구자 수, 기술분야별 논문 수 등 집계에도 사용 가능
+        - 엔티티 반환 시 UI 출처 표기를 위해 반드시 노드 라벨을 `node_type`으로 함께 반환하세요 (예: `RETURN p.id AS id, p.title AS title, labels(p)[0] AS node_type`).
         </instructions>
 
         <constraints>

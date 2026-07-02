@@ -53,15 +53,15 @@ def make_fetch_researcher_network_fn(driver: Any) -> Any:
             params = {"name": researcher_name}
             limit = 10
         # 패턴 컴프리헨션 — OPTIONAL MATCH 조합의 카티전 곱 없이 관계별 수집.
-        # papers/patents는 후속 조회(get_entities 등)가 가능하도록 id를 함께 반환.
+        # papers/patents는 후속 조회(get_entities 등)가 가능하도록 id와 node_type을 함께 반환.
         cypher = f"""
             MATCH (r:Researcher)
             {where_clause}
             RETURN
                 r.name AS name,
                 r.id   AS researcher_id,
-                [(r)-[:AUTHORED]->(p:Paper)    | {{id: p.id, title: p.title}}][..5]   AS papers,
-                [(r)-[:INVENTED]->(pat:Patent) | {{id: pat.id, title: pat.title}}][..5] AS patents,
+                [(r)-[:AUTHORED]->(p:Paper)    | {{id: p.id, title: p.title, node_type: 'Paper'}}][..5]   AS papers,
+                [(r)-[:INVENTED]->(pat:Patent) | {{id: pat.id, title: pat.title, node_type: 'Patent'}}][..5] AS patents,
                 [(r)-[:WORKS_AT]->(org:Organization) | org.name][0] AS organization,
                 [(r)-[:RESEARCHES]->(t:Technology)   | t.name][..10] AS technologies
             LIMIT {limit}
