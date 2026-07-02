@@ -1,6 +1,18 @@
+import re
 from typing import Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
+
+
+_CITE_RE = re.compile(r'\[#([A-Za-z0-9\-_.]+)\]')
+
+
+def _strip_citations(text: str) -> str:
+    """[#ID] 인용 마커에서 # 제거 → 오케스트레이터가 raw ID로 인식하도록.
+
+    예) [#RS-2024-00123456] → (RS-2024-00123456)
+    """
+    return _CITE_RE.sub(lambda m: f"({m.group(1)})", text)
 
 
 def split_turns(messages: list[Any]) -> tuple[list[Any], list[Any]]:
@@ -17,8 +29,15 @@ def previous_turn_context(messages: list[Any]) -> list[Any]:
 
     질문(HumanMessage — 압축 요약 포함)과 최종답변(final_answer)만 유지하고
     계획·수집 요약 등 중간 산출물은 제외한다.
+
+    final_answer의 [#ID] 인용 마커는 오케스트레이터가 '#' 포함 형태로 검색하지 않도록
+    raw ID 형태 (ID) 로 치환한다.
     """
-    return [
-        m for m in messages
-        if isinstance(m, HumanMessage) or getattr(m, "name", None) == "final_answer"
-    ]
+    result: list[HumanMessage | AIMessage] = []
+    for m in messages:
+        if isinstance(m, HumanMessage):
+            result.append(m)
+        elif getattr(m, "name", None) == "final_answer":
+            cleaned = _strip_citations(m.content if isinstance(m.content, str) else "")
+            result.append(AIMessage(content=cleaned, name="final_answer"))
+    return result
