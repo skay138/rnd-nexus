@@ -33,7 +33,13 @@ _ENTITY_ID_KEYS: list[tuple[str, str, str | None]] = [
 def _entity_to_ref(d: dict) -> dict | None:
     for id_key, label, title_key in _ENTITY_ID_KEYS:
         if id_key in d:
-            title = d.get(title_key or "name") or d.get("title") or d.get("name") or ""
+            title = (
+                d.get(title_key or "name")
+                or d.get("title")
+                or d.get("name")
+                or d.get("researcher")   # get_researcher_network: "researcher" key holds the name
+                or ""
+            )
             return {"type": label, "id": d[id_key], "title": title}
     if "node_type" in d:
         return {
@@ -41,7 +47,14 @@ def _entity_to_ref(d: dict) -> dict | None:
             "id":    str(d.get("id") or d.get("entity_id") or ""),
             "title": d.get("name") or d.get("title") or "",
         }
+    # get_citation_graph: {source, source_id, target, target_id, ...} 형식 — 행당 2개 엔티티
+    # 여기서는 source/target 각각을 별도 엔티티로 다루지 않고 첫 번째 유효 ID만 사용
+    if "source_id" in d:
+        return {"type": "Paper", "id": str(d["source_id"]), "title": d.get("source") or ""}
+    if "target_id" in d:
+        return {"type": "Paper", "id": str(d["target_id"]), "title": d.get("target") or ""}
     return None
+
 
 
 def _is_cited(ref: dict, answer: str) -> bool:

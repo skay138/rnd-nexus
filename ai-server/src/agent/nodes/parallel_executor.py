@@ -122,7 +122,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
 - If [Completed tasks from previous rounds] is provided, do not repeat the same searches.
 - When you finish, reply with ONLY this JSON object (no other text):
   {"summary": "한 줄 보고 — 무엇을 수집했는지 또는 왜 찾지 못했는지 (Korean)", "relevant_ids": ["ID1", "ID2"]}
-- relevant_ids: IDs of entities DIRECTLY relevant to [태스크], chosen only from IDs that appeared in tool results — never invent IDs. Exclude unrelated or only tangentially related entities. Empty list if nothing relevant.
+- relevant_ids: IDs of entities DIRECTLY relevant to [태스크], chosen only from IDs that appeared in THIS round's tool results — never invent IDs. If no tools were called this round, relevant_ids must be []. Exclude unrelated or only tangentially related entities.
 </instructions>""")
 
     task_content = (
