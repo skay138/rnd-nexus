@@ -50,7 +50,7 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
       items 원소가 list면 엔티티 그룹(list[dict]), str이면 비엔티티 result_text.
     """
     blocks: list[dict] = []
-    seen_ids: set[str] = set()
+    seen_entities: dict[str, dict] = {}
     seen_text: set[str] = set()
 
     for r in task_execution_results:
@@ -75,9 +75,24 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
                     if sel and ids and not (set(ids) & sel):
                         continue
                     keys = ids or [json.dumps(e, sort_keys=True, ensure_ascii=False)]
-                    if any(k in seen_ids for k in keys):
+                    
+                    existing_entity = next((seen_entities[k] for k in keys if k in seen_entities), None)
+                    if existing_entity is not None:
+                        for k, v in e.items():
+                            if not v:
+                                continue
+                            ev = existing_entity.get(k)
+                            if not ev:
+                                if v not in existing_entity.values():
+                                    existing_entity[k] = v
+                            elif isinstance(ev, list) and isinstance(v, list):
+                                for item in v:
+                                    if item not in ev:
+                                        ev.append(item)
                         continue
-                    seen_ids.update(keys)
+                        
+                    for k in keys:
+                        seen_entities[k] = e
                     kept.append(e)
                 if kept:
                     items.append(kept)
