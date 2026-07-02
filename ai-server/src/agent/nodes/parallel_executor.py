@@ -12,6 +12,8 @@ from common.config.query_config import RequestConfig
 from common.llm import get_llm
 from common.parsers import (
     clean_tool_result,
+    entity_ids,
+    iter_entities,
     strip_code_fence,
     strip_think,
     summarize_tool_result,
@@ -70,22 +72,169 @@ def _format_round_results(results: list[TaskExecutionResult]) -> str:
             lines.append(f"  {mark} {tc['tool_name']}: {tc['summary']}")
         if not r["tool_calls"]:
             lines.append("  (도구 호출 없음)")
+        if r.get("selected_ids"):
+            # orchestrator가 다음 라운드 태스크 설명에 ID를 직접 포함할 수 있도록 노출
+            lines.append(f"  선별 ID: {', '.join(r['selected_ids'][:10])}")
         if r.get("worker_note"):
             lines.append(f"  보고: {r['worker_note']}")
     return "\n".join(lines)
 
 
-def _parse_worker_final(text: str) -> tuple[str, list[str]]:
+def _parse_worker_final(text: str) -> tuple[str, list[str], bool]:
     """워커 최종 응답({"summary", "relevant_ids"} JSON) 파싱.
 
-    JSON이 아니면(모델이 평문으로 답한 경우) 원문을 보고로, 선별 없음으로 처리.
+    반환: (보고 한 줄, 선별 ID 목록, 선별 유효 여부).
+    유효 여부 True + 빈 목록 = 워커가 '관련 엔티티 없음'을 명시한 것 —
+    파싱 실패(평문 응답)의 '선별 정보 없음'(False)과 구분된다.
     """
     data = try_parse(strip_code_fence(text))
-    if isinstance(data, dict):
+    if isinstance(data, dict) and "relevant_ids" in data:
         summary = str(data.get("summary", "")).strip()
         ids = [str(i) for i in data.get("relevant_ids") or [] if i]
-        return (summary or text), ids
-    return text, []
+        return (summary or text), ids, True
+    if isinstance(data, dict):
+        summary = str(data.get("summary", "")).strip()
+        return (summary or text), [], False
+    return text, [], False
+
+
+_ENRICH_MAX = 20
+_ID_KEY_TO_TYPE = {
+    "paper_id":      "Paper",
+    "patent_id":     "Patent",
+    "researcher_id": "Researcher",
+    "tech_id":       "Technology",
+    "technology_id": "Technology",
+    "project_id":    "Project",
+    "org_id":        "Organization",
+}
+_DETAIL_TOOLS = ("get_entities", "filter_entities")
+
+
+def _detail_fetched_ids(results: list[dict]) -> set[str]:
+    """이번 턴에서 상세 조회 도구로 이미 전체 필드가 수집된 ID 집합."""
+    fetched: set[str] = set()
+    for r in results:
+        for tc in r.get("tool_calls", []):
+            if tc.get("is_error") or tc.get("tool_name") not in _DETAIL_TOOLS:
+                continue
+            for e in iter_entities(tc.get("result_text", "")):
+                fetched.update(entity_ids(e))
+    return fetched
+
+
+def _entity_score_map(results: list[dict]) -> dict[str, float]:
+    """수집된 엔티티의 ID → 최고 검색 score 매핑 (score 필드가 있는 결과만)."""
+    scores: dict[str, float] = {}
+    for r in results:
+        for tc in r.get("tool_calls", []):
+            if tc.get("is_error"):
+                continue
+            for e in iter_entities(tc.get("result_text", "")):
+                s = e.get("score")
+                if isinstance(s, (int, float)):
+                    for i in entity_ids(e):
+                        if i not in scores or s > scores[i]:
+                            scores[i] = float(s)
+    return scores
+
+
+def _entity_type_map(results: list[dict]) -> dict[str, str]:
+    """수집된 엔티티로부터 ID → entity_type 매핑 구성 (node_type 필드 + 도메인 ID 키)."""
+    mapping: dict[str, str] = {}
+    for r in results:
+        for tc in r.get("tool_calls", []):
+            if tc.get("is_error"):
+                continue
+            for e in iter_entities(tc.get("result_text", "")):
+                nt = e.get("node_type")
+                if nt:
+                    for i in entity_ids(e):
+                        mapping.setdefault(i, str(nt))
+                for key, etype in _ID_KEY_TO_TYPE.items():
+                    if e.get(key):
+                        mapping.setdefault(str(e[key]), etype)
+    return mapping
+
+
+async def _enrich_selected_entities(
+    new_results: list[TaskExecutionResult],
+    all_results: list[dict],
+    tools_by_name: dict[str, Any],
+    current_round: int,
+    sse_queue: asyncio.Queue | None = None,
+) -> TaskExecutionResult | None:
+    """워커가 선별(relevant_ids)했지만 상세 조회를 생략한 ID를 코드가 직접 보강.
+
+    워커 모델이 검색·그래프 조회만 하고 get_entities를 건너뛰는 판단 편차를
+    코드 레벨에서 보정한다 (LLM 호출 없음 — 결정적 동작).
+    """
+    tool = tools_by_name.get("get_entities")
+    if tool is None:
+        return None
+
+    selected: list[str] = []
+    for r in new_results:
+        for i in r.get("selected_ids", []):
+            if i not in selected:
+                selected.append(i)
+    if not selected:
+        return None
+
+    fetched  = _detail_fetched_ids(all_results)
+    type_map = _entity_type_map(all_results)
+    missing  = [i for i in selected if i not in fetched and i in type_map]
+    if not missing:
+        return None
+    if len(missing) > _ENRICH_MAX:
+        # score 높은 순으로 상위만 보강 — 점수 미상 ID는 워커 선별 순서를 유지한 채 뒤로 (stable sort)
+        score_map = _entity_score_map(all_results)
+        missing.sort(key=lambda i: score_map.get(i, -1.0), reverse=True)
+        logger.warning("[EXEC] 상세 보강 대상 %d건 → score 상위 %d건만 보강", len(missing), _ENRICH_MAX)
+        missing = missing[:_ENRICH_MAX]
+
+    by_type: dict[str, list[str]] = {}
+    for i in missing:
+        by_type.setdefault(type_map[i], []).append(i)
+
+    tool_calls: list[ToolCallRecord] = []
+    for etype, ids in by_type.items():
+        args = {"entity_type": etype, "ids": ids}
+        t0 = time.perf_counter()
+        try:
+            result_str = str(await tool.ainvoke(args))
+        except Exception as e:
+            result_str = f"[ERROR] get_entities 실패: {type(e).__name__}: {e}"
+        elapsed = time.perf_counter() - t0
+        summary = summarize_tool_result(result_str)
+        tool_calls.append({
+            "tool_name":   "get_entities",
+            "args":        args,
+            "result_text": clean_tool_result(result_str),
+            "summary":     summary,
+            "is_error":    result_str.startswith("[ERROR]"),
+        })
+        logger.debug("[EXEC] 상세 보강  %s %d건  %.2fs  → %s", etype, len(ids), elapsed, summary)
+
+    result: TaskExecutionResult = {
+        "task_id":          f"enrich-r{current_round}",
+        "task_description": "선별 엔티티 상세 정보 보강",
+        "round":            current_round,
+        "status":           "completed",
+        "tool_calls":       tool_calls,
+        "worker_note":      "",
+        "selected_ids":     missing,
+        "selection_valid":  True,
+    }
+    if sse_queue is not None:
+        await sse_queue.put(("worker_result", {
+            "type":    "task_result",
+            "task_id": result["task_id"],
+            "round":   current_round,
+            "task":    result["task_description"],
+            "tools":   [{"name": tc["tool_name"], "summary": tc["summary"]} for tc in tool_calls],
+        }))
+    return result
 
 
 async def _run_worker(
@@ -107,6 +256,7 @@ async def _run_worker(
     tool_calls: list[ToolCallRecord] = []
     worker_note = ""                  # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
     selected_ids: list[str] = []      # 워커가 선별한 태스크 관련 엔티티 ID
+    selection_valid = False           # relevant_ids가 유효 JSON으로 반환됐는지
 
     llm = get_llm(model=RequestConfig.current().worker_model or settings.rnd_model)
     llm_with_tools = llm.bind_tools(list(tools_by_name.values()))
@@ -117,13 +267,15 @@ You are an R&D data collection worker. Collect the requested data by calling too
 
 <instructions>
 - [태스크] is the top priority. Use [원본 질문] only as supplementary context when keywords are missing or pronouns are used.
-- Select tools autonomously based on the task. If sufficient IDs are obtained from search, consider calling a detail-retrieval tool to collect full fields (affiliation, abstract, h_index, etc.).
+- Select tools autonomously based on the task. If sufficient IDs are obtained from search, consider calling a detail-retrieval tool to collect full fields (affiliation, abstract, etc.).
+- If [태스크] filters by specific fields (year, affiliation, status, etc.) that are not visible in search results, call a detail-retrieval tool BEFORE deciding relevant_ids.
 - Determine the correct entity_type for tools based on the explicit context in [태스크] (e.g., 논문=Paper, 연구자=Researcher, 과제=Project, 기관=Organization, 기술=Technology, 특허=Patent).
 - Stop when sufficient data is collected or all reasonable retrieval paths are exhausted.
 - If [Completed tasks from previous rounds] is provided, do not repeat the same searches.
 - When you finish, reply with ONLY this JSON object (no other text):
   {"summary": "한 줄 보고 — 무엇을 수집했는지 또는 왜 찾지 못했는지 (Korean)", "relevant_ids": ["ID1", "ID2"]}
-- relevant_ids: IDs of entities DIRECTLY relevant to [태스크], chosen only from IDs that appeared in THIS round's tool results — never invent IDs. If no tools were called this round, relevant_ids must be []. Exclude unrelated or only tangentially related entities.
+- relevant_ids: IDs of entities relevant to [태스크], chosen only from IDs that appeared in YOUR tool results above — never invent IDs. Order by relevance, most relevant first. If you called no tools, relevant_ids must be [].
+- Exclude only entities CLEARLY unrelated to the task topic. When uncertain from the available information, INCLUDE the ID — detailed data is fetched later and final relevance filtering happens downstream. Precision matters less than not losing relevant entities.
 </instructions>""")
 
     task_content = (
@@ -143,7 +295,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
             messages.append(response)
 
             if not getattr(response, "tool_calls", None):
-                worker_note, selected_ids = _parse_worker_final(
+                worker_note, selected_ids, selection_valid = _parse_worker_final(
                     strip_think(str(response.content))
                 )
                 logger.debug(
@@ -220,6 +372,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
             "tool_calls":       tool_calls,
             "worker_note":      worker_note,
             "selected_ids":     selected_ids,
+            "selection_valid":  selection_valid,
         }
         return result
 
@@ -239,6 +392,7 @@ You are an R&D data collection worker. Collect the requested data by calling too
             }],
             "worker_note":      "",
             "selected_ids":     [],
+            "selection_valid":  False,
         }
         return err_result
 
@@ -303,6 +457,16 @@ async def parallel_executor(state: RDAgentState, config: RunnableConfig) -> dict
             for r in new_results
         ),
     )
+
+    # 코드 레벨 상세 보강 — 워커가 선별만 하고 상세 조회를 생략한 ID를 get_entities로 채움
+    # (collect_relevant_data의 필드 병합 dedup이 검색 스니펫에 상세 필드를 합쳐 generate에 전달)
+    enrich = await _enrich_selected_entities(
+        new_results,
+        list(state.get("task_execution_results", [])) + new_results,
+        tools_by_name, current_round, sse_queue,
+    )
+    if enrich is not None:
+        new_results.append(enrich)
 
     # 정제된 라운드 요약만 공유 컨텍스트에 올림 — raw 도구 트래픽은 워커에 격리,
     # 전체 result_text는 task_execution_results에 단일 보관 (generate가 직접 사용)

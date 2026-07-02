@@ -145,8 +145,7 @@
     "title": "Sparse Tensor Core Design for Efficient Transformer Inference",
     "authors": [
       "이수진",
-      "강지원",
-      "백기태"
+      "강지원"
     ],
     "year": 2023,
     "citations": 634,

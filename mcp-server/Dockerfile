@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY domain/ /app/domain/
 COPY mcp-server/src/ /app/src/
+COPY scripts/ /app/scripts/
 COPY data/ /app/data/
 COPY .env.example /app/.env.example
 

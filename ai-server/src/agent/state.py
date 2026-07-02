@@ -24,7 +24,8 @@ class TaskExecutionResult(TypedDict):
     status: str        # "completed" | "empty" | "error"
     tool_calls: list[ToolCallRecord]
     worker_note: str          # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
-    selected_ids: list[str]   # 워커가 태스크와 직접 관련하다고 선별한 엔티티 ID (빈 리스트 = 선별 없음 → 전문 사용)
+    selected_ids: list[str]   # 워커가 태스크와 직접 관련하다고 선별한 엔티티 ID
+    selection_valid: bool     # 워커가 relevant_ids를 유효 JSON으로 반환했는지 — True+빈 리스트 = '관련 없음' 판정, False = 선별 정보 없음(전문 fallback)
 
 
 class RDAgentState(TypedDict):

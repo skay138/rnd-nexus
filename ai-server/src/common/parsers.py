@@ -61,6 +61,8 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
         ]
 
         sel = {str(i) for i in r.get("selected_ids", []) if i}
+        # 워커가 유효한 JSON으로 '관련 엔티티 없음'을 명시한 경우 — 선별 없음 fallback과 구분
+        deliberate_empty = (not sel) and bool(r.get("selection_valid"))
         if sel:
             present = {i for _, ents in calls for e in ents for i in entity_ids(e)}
             if not (sel & present):
@@ -69,6 +71,8 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
         items: list = []
         for tc, entities in calls:
             if entities:
+                if deliberate_empty:
+                    continue   # 워커가 전부 무관하다고 판단한 태스크의 엔티티는 제외
                 kept: list[dict] = []
                 for e in entities:
                     ids = entity_ids(e)
@@ -83,14 +87,20 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
                                 continue
                             ev = existing_entity.get(k)
                             if not ev:
-                                if v not in existing_entity.values():
-                                    existing_entity[k] = v
+                                # 값 중복 가드는 ID 계열 키에만 적용 — name/title 같은 정규 키는
+                                # 같은 값이 별칭 키(researcher 등)로 있어도 항상 병합한다
+                                if k in _ENTITY_ID_KEYS and v in existing_entity.values():
+                                    continue
+                                existing_entity[k] = v
                             elif isinstance(ev, list) and isinstance(v, list):
                                 for item in v:
                                     if item not in ev:
                                         ev.append(item)
+                        # 이 레코드로 새로 알게 된 ID도 같은 엔티티로 등록 (multi-ID 행 대응)
+                        for k in keys:
+                            seen_entities.setdefault(k, existing_entity)
                         continue
-                        
+
                     for k in keys:
                         seen_entities[k] = e
                     kept.append(e)
@@ -100,6 +110,9 @@ def collect_relevant_data(task_execution_results: list) -> list[dict]:
                 text = tc["result_text"]
                 if text in seen_text:
                     continue
+                parsed = try_parse(text)
+                if parsed is not None and not parsed:
+                    continue   # "[]", "{}" 등 빈 구조는 컨텍스트에 넣지 않음
                 seen_text.add(text)
                 items.append(text)
 

@@ -31,12 +31,12 @@ _DEPENDENCY_SIGNALS = (
 _STRATEGY = """
 <instructions>
 - Bundle independent tasks in the same round for parallel execution.
-- If one task's output (IDs, identifiers) is required as input for the next, never split them — merge into a single task. Workers handle sequential steps autonomously within a task.
-- If a task description contains "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" (dependency signals in Korean), it depends on a prior task's results — merge it with the preceding task.
+- If one task's output (IDs, identifiers) is required as input for the next, never split them — merge into a single task; workers handle sequential steps autonomously. Signal words like "검색된", "찾은", "조회된", "수집된", "위의", "앞서", "이전 결과" in a task description indicate such a dependency.
 - Tasks that use only the same user-supplied input (name, keyword) are independent and can run in parallel.
 - Judge data sufficiency from the [수집 결과] messages collected in this turn. If they cover the user's question, return tasks=[] to finish; otherwise plan additional tasks from a different angle, keyword, or scope.
 - If [수집 결과] shows empty results (빈 결과) or a failure report for a search, never plan the same search again — change keywords or scope, or finish with tasks=[].
 - Each task must include the core keywords from the user's question (names, IDs, etc.).
+- If IDs or identifiers have already been collected in previous rounds or from the user, include them directly in the task description.
 - If a task involves a specific entity, explicitly specify its entity type (e.g., 논문, 과제, 연구자) in the task description based on the conversation context. Example: Write "논문 12345의..." instead of "12345의...".
 - Do not expand into new domains or topics beyond the scope of the original question.
 </instructions>
@@ -76,10 +76,18 @@ def _make_task_id(description: str) -> str:
 
 
 def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
+    """도구 docstring에서 첫 번째 실제 설명 문장을 추출.
+
+    docstring이 <role> 등 태그로 시작하므로 태그·빈 줄을 건너뛴다.
+    """
     lines = []
     for tool in tools_by_name.values():
         desc = (getattr(tool, "description", "") or "").strip()
-        first_line = desc.splitlines()[0] if desc else ""
+        first_line = next(
+            (ln.strip() for ln in desc.splitlines()
+             if ln.strip() and not ln.strip().startswith("<")),
+            "",
+        )
         if first_line:
             lines.append(f"  - {first_line}")
     return "<tools>\n" + "\n".join(lines) + "\n</tools>"
@@ -104,8 +112,7 @@ Each worker reads the task description and autonomously selects the appropriate 
 {_STRATEGY}
 
 <constraints>
-- Current round: {iteration_count + 1} / {max_iterations}
-{"- This is the final collection round. Answer generation begins immediately after." if iteration_count + 1 >= max_iterations else "- If more data is needed, plan new tasks from a different angle, keyword, or scope."}
+- Current round: {iteration_count + 1} / {max_iterations}{chr(10) + "- This is the FINAL collection round. Answer generation begins immediately after — plan only what is essential." if iteration_count + 1 >= max_iterations else ""}
 - Each task description must be specific enough for a worker to execute independently.
 </constraints>
 
