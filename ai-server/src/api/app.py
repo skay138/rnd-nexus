@@ -34,9 +34,9 @@ _LEVEL_CLR: dict[str, str] = {
 }
 # 노드별 색상 (logger name prefix → ANSI color)
 _NAME_CLR: list[tuple[str, str]] = [
-    ("agent.nodes.orchestrator",     "\033[35m"),   # magenta
-    ("agent.nodes.parallel_executor","\033[33m"),   # yellow
-    ("agent.nodes.generate",         "\033[32m"),   # green
+    ("agent.orchestrator",           "\033[35m"),   # magenta
+    ("agent.worker",                 "\033[33m"),   # yellow
+    ("agent.generator",              "\033[32m"),   # green
     ("agent.mcp_client",             "\033[90m"),   # dark gray
     ("memory.tool_cache",            "\033[34m"),   # blue
     ("agent.graph",                  "\033[36m"),   # cyan
