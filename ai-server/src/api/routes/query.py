@@ -35,17 +35,29 @@ _ENTITY_ID_KEYS: list[tuple[str, str, str | None]] = [
 def _extract_refs_from_dict(d: dict) -> list[dict]:
     refs = []
     
-    # 1. 일반 엔티티 (search_papers 등) 및 엣지 엔티티 (source_paper_id 등)
     for id_key, label, title_key in _ENTITY_ID_KEYS:
         if id_key in d:
+            prefix = id_key.split("_id")[0]  # 'researcher_id' -> 'researcher', 'source_paper_id' -> 'source_paper'
+            
+            # 1. 명시적 접두어가 붙은 필드 우선 탐색 (graph_query flat row 방어)
             title = (
-                d.get(title_key or "name")
-                or d.get("title")
-                or d.get("name")
-                or d.get("researcher")   # get_researcher_network: "researcher" key holds the name
-                or ""
+                d.get(f"{prefix}_name")
+                or d.get(f"{prefix}_title")
+                or d.get(prefix)
             )
-            refs.append({"type": label, "id": d[id_key], "title": title})
+            
+            # 2. 지정된 title_key 탐색
+            if not title and title_key:
+                title = d.get(title_key)
+                
+            # 3. 범용 필드 Fallback (타입별 교차 오염 방지)
+            if not title:
+                if label in ("Researcher", "Organization"):
+                    title = d.get("name")
+                else:
+                    title = d.get("title") or d.get("name")
+                    
+            refs.append({"type": label, "id": d[id_key], "title": title or ""})
             
     # 2. node_type 명시된 그래프 노드
     if "node_type" in d:

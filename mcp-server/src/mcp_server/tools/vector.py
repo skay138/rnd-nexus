@@ -29,6 +29,9 @@ def register_vector_tools(mcp: FastMCP) -> None:
         <instructions>
         - 동일 타입 엔티티를 키워드/의미로 검색할 때 사용하세요
         - 다른 타입으로 연결된 엔티티(기술→연구자, 논문→저자)는 semantic_graph_search를 사용하세요
+        - '특정 기술을 사용하는 과제', '특정 연구자의 논문'처럼 관계 기반 수집에는 대상 타입(node_type=Project 등)을
+          직접 검색하지 마세요 — 텍스트만 유사하고 실제 관계(USES, AUTHORED)가 없는 엔티티가 섞입니다.
+          기준 엔티티 타입으로 검색해 앵커를 찾은 뒤 그래프 도구로 관계를 따라가세요.
         - 반환된 id를 get_entities에 전달하면 상세 정보 조회 가능
         - name 필드만 필요한 경우 get_entities 생략 가능
         </instructions>
