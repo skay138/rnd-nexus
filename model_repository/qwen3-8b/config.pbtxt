@@ -5,7 +5,7 @@ model_transaction_policy { decoupled: true }
 instance_group [
   {
     count: 1
-    kind: KIND_MODEL
+    kind: KIND_GPU
     gpus: [ 0 ]
   }
 ]
