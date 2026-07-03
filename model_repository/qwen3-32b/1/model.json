@@ -1,5 +1,5 @@
 {
-  "model": "Qwen/Qwen3-32B-Instruct-AWQ",
+  "model": "Qwen/Qwen3-32B-AWQ",
   "dtype": "auto",
   "quantization": "awq",
   "tensor_parallel_size": 2,
