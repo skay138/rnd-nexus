@@ -239,7 +239,7 @@ async def _stream_events(
             # ── 실시간 토큰 (generate 노드에서만) ─────────────────────────────
             if mode == "messages":
                 msg_chunk, metadata = data
-                if (metadata.get("langgraph_node") == "generate"
+                if (metadata.get("langgraph_node") == "generator"
                         and isinstance(msg_chunk, AIMessageChunk)):
                     raw = getattr(msg_chunk, "content", "")
                     if raw:

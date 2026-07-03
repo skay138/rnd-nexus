@@ -107,7 +107,7 @@ async def auto_join_details(result_text: str, tools_by_name: dict[str, Any]) -> 
     return json.dumps(rows, ensure_ascii=False)
 
 
-def detail_fetched_ids(results: list[dict]) -> set[str]:
+def detail_fetched_ids(results: list[TaskExecutionResult]) -> set[str]:
     """이번 턴에서 전체 필드가 이미 수집된 ID 집합.
 
     상세 조회 도구 결과 + 검색 결과 중 자동 조인으로 상세 필드를 보유한 행 포함.
@@ -128,7 +128,7 @@ def detail_fetched_ids(results: list[dict]) -> set[str]:
     return fetched
 
 
-def entity_score_map(results: list[dict]) -> dict[str, float]:
+def entity_score_map(results: list[TaskExecutionResult]) -> dict[str, float]:
     """수집된 엔티티의 ID → 최고 검색 score 매핑 (score 필드가 있는 결과만)."""
     scores: dict[str, float] = {}
     for r in results:
@@ -144,7 +144,7 @@ def entity_score_map(results: list[dict]) -> dict[str, float]:
     return scores
 
 
-def entity_type_map(results: list[dict]) -> dict[str, str]:
+def entity_type_map(results: list[TaskExecutionResult]) -> dict[str, str]:
     """수집된 엔티티로부터 ID → entity_type 매핑 구성 (node_type 필드 + 도메인 ID 키 + 중첩 목록)."""
     mapping: dict[str, str] = {}
     for r in results:
@@ -171,7 +171,7 @@ def entity_type_map(results: list[dict]) -> dict[str, str]:
 
 async def enrich_selected_entities(
     new_results: list[TaskExecutionResult],
-    all_results: list[dict],
+    all_results: list[TaskExecutionResult],
     tools_by_name: dict[str, Any],
     current_round: int,
     sse_queue: asyncio.Queue | None = None,

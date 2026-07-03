@@ -37,7 +37,7 @@ AI 반도체 핵심 연구자를 추천해줘
 - **Worker Agent:** 각 태스크를 받아 어떤 도구를 어떻게 쓸지 스스로 판단 (mini ReAct loop)
 - **코드가 담당:** 루프 제어·종료, 중복 태스크 차단, 에러 격리, Memory 관리
 
-`iteration_count >= max_iterations` 도달 시 LLM 판단 없이 코드가 `generate`로 강제 라우팅합니다.
+`iteration_count >= max_iterations` 도달 시 LLM 판단 없이 코드가 `generator`로 강제 라우팅합니다 (`graph.py:_after_worker`).
 
 ### 도구는 RunnableConfig로 주입
 
@@ -50,9 +50,18 @@ async with mcp_server_session() as session:
     app.state.graph = build_graph(memory)
 ```
 
-### Messages가 Source of Truth
+### 데이터는 task_execution_results, 대화 맥락은 messages
 
-모든 노드 간 컨텍스트는 `state["messages"]`를 통해 전달됩니다. `generate`는 `orchestrator`, `tool_results`, `final_answer` 이름의 메시지를 필터링해 사용합니다.
+수집 데이터의 단일 소스는 `state["task_execution_results"]`입니다 (raw 도구 결과 전문 보관).
+`state["messages"]`에는 정제된 라운드 요약(`AIMessage(name="tool_results")`)만 올라가며, 워커의 도구 호출 트래픽은 워커 내부에 격리됩니다.
+`generator`는 `collect_relevant_data()`(워커 selected_ids 기반 선별 + 전역 dedup)로 `task_execution_results`에서 직접 데이터를 가져옵니다.
+
+### 하네스 레벨 데이터 완전성 보강 (agent/worker/enrichment.py)
+
+워커 LLM의 판단 편차(상세 조회 생략)를 코드가 결정적으로 보정합니다 (LLM 호출 없음, get_entities만 사용):
+- `auto_join_details`: 검색 결과 행에 상세 필드를 즉시 조인 (워커 루프 안, 상위 JOIN_MAX=10건)
+- `enrich_selected_entities`: 선별됐지만 상세가 없는 ID를 라운드 끝에 일괄 조회 (안전망, ENRICH_MAX=20건)
+  - 그래프 결과에 중첩된 papers/patents ID도 `NESTED_KEY_TO_TYPE`로 타입을 추론해 보강 대상에 포함
 
 ### Config 우선순위
 
@@ -67,28 +76,29 @@ HTTP POST /agent/query  (SSE 스트리밍)
     ↓
 RequestConfig.set_current()       ← API params > MariaDB > defaults
     ↓
-orchestrator                      ← OrchestratorPlan (with_structured_output)
-                                    고수준 태스크 목록 반환 list[str]
+orchestrator                      ← OrchestratorPlan (with_structured_output, 실패 시 재시도)
+                                    고수준 태스크 목록 list[str] + out_of_scope 판정
     ↓
-should_continue                   ← pending_tasks 유무만 확인
-    ├─ tasks 있음 → parallel_executor
-    └─ 없음 → generate
+_should_continue                  ← pending_tasks 유무만 확인
+    ├─ tasks 있음 → worker
+    └─ 없음 → generator
          ↓
-parallel_executor                 ← 태스크별 Worker Agent 병렬 실행
-    각 Worker: get_llm().bind_tools() + ReAct loop (최대 5스텝)
-    의존관계 도구 호출도 워커 내부에서 자율 처리
+worker (worker_node)              ← 태스크별 Worker Agent 병렬 실행 (asyncio.gather)
+    각 워커(run_worker): get_llm().bind_tools() + ReAct loop (WORKER_MAX_STEPS=10)
+    검색 결과에 상세 자동 조인(auto_join_details) → 최종 {"summary", "relevant_ids"} JSON 반환
+    라운드 끝: enrich_selected_entities 사후 보강 → 라운드 요약만 messages에 추가
          ↓
-_after_executor                   ← iteration_count >= max_iterations
-    ├─ 조건 충족 → generate
+_after_worker                     ← iteration_count >= max_iterations
+    ├─ 조건 충족 → generator
     └─ 아니면 → orchestrator
          ↓
-generate                          ← messages 히스토리 기반 최종 답변
-    relevant: human | orchestrator | tool_results | final_answer
+generator                         ← collect_relevant_data(task_execution_results) 기반 최종 답변
+    get_llm(streaming=True) → SSE 토큰 스트리밍, AIMessage(name="final_answer")
          ↓
 SSE done 이벤트 (references 포함)
 ```
 
-**SSE 이벤트 타입:** `orchestrator` | `tool_result` | `token` | `done` | `error`
+**SSE 이벤트 타입:** `orchestrator` | `task_result` | `token` | `done` | `error`
 
 ---
 
@@ -110,32 +120,38 @@ rnd-nexus/
 │       │   ├── schemas.py     ← QueryRequest, ConfigOverride, HealthResponse
 │       │   └── routes/
 │       │       ├── health.py  ← GET /health
-│       │       └── query.py   ← POST /agent/query (SSE 스트리밍)
+│       │       ├── query.py   ← POST /agent/query (SSE 스트리밍, references 생성)
+│       │       ├── admin.py   ← GET/PATCH /admin/config (system_config 조회·변경)
+│       │       └── stats.py   ← GET /stats
 │       ├── common/
 │       │   ├── config/
 │       │   │   └── query_config.py  ← CONFIG_DEFAULTS, QueryConfig, RequestConfig (ContextVar)
 │       │   ├── llm.py               ← get_llm() 팩토리 (ollama / openai 호환 서버)
-│       │   └── parsers.py           ← iter_entities(), item_to_ref(), summarize_tool_result()
+│       │   └── parsers.py           ← iter_entities(), collect_relevant_data(), clean_tool_result(),
+│       │                               extract_tool_error(), summarize_tool_result()
 │       ├── infrastructure/
 │       │   ├── config_repository.py  ← MemoryConfigRepository, MariaDBConfigRepository
 │       │   └── mariadb.py            ← parse_mariadb_url()
 │       ├── agent/
-│       │   ├── graph.py       ← build_graph(memory), should_continue, _after_executor
+│       │   ├── graph.py       ← build_graph(memory), _should_continue, _after_worker
 │       │   ├── mcp_client.py  ← mcp_server_session(), get_llm_and_tools()
-│       │   ├── state.py       ← RDAgentState (typing_extensions.TypedDict)
-│       │   ├── nodes/
-│       │   │   ├── orchestrator.py   ← 고수준 태스크 계획
-│       │   │   ├── parallel_executor.py  ← Worker Agent 병렬 실행
-│       │   │   └── generate.py       ← 최종 답변 생성
-│       │   ├── edges/
-│       │   │   └── should_continue.py
+│       │   ├── state.py       ← RDAgentState, TaskSpec, ToolCallRecord, TaskExecutionResult
+│       │   ├── orchestrator/
+│       │   │   └── orchestrator_node.py  ← 고수준 태스크 계획 (OrchestratorPlan)
+│       │   ├── worker/
+│       │   │   ├── worker_node.py  ← 병렬 실행·중복 차단·라운드 요약 (graph의 "worker" 노드)
+│       │   │   ├── worker.py       ← run_worker() — 워커 1개의 ReAct 루프 + 시스템 프롬프트
+│       │   │   └── enrichment.py   ← auto_join_details(), enrich_selected_entities()
+│       │   ├── generator/
+│       │   │   └── generator_node.py  ← 최종 답변 생성 (collect_relevant_data 기반)
 │       │   └── utils/
-│       │       └── context.py        ← get_turn_context() 멀티턴 경계 분리
+│       │       └── context.py        ← split_turns(), previous_turn_context() 멀티턴 경계 분리
 │       ├── memory/
 │       │   ├── session.py     ← AsyncRedisSaver, asynccontextmanager
-│       │   └── compaction.py  ← should_compact(), compact_messages()
+│       │   └── compaction.py  ← should_compact(), apply_compaction(), compact_messages()
 │       └── static/
-│           └── index.html     ← 다크 테마 UI (퍼플 #7c3aed, SSE 수신)
+│           ├── index.html     ← 다크 테마 UI (퍼플 #7c3aed, SSE 수신)
+│           └── settings.html  ← /settings 관리 페이지 (모델·파라미터 변경)
 ├── mcp-server/                ← FastMCP 데이터 서버 (SSE, port 8000)
 │   ├── pyproject.toml
 │   ├── Dockerfile
@@ -176,18 +192,33 @@ rnd-nexus/
 
 ```python
 # src/agent/state.py
-from typing import Annotated
-from typing_extensions import TypedDict
-from langchain_core.messages import AnyMessage
-from langgraph.graph.message import add_messages
+class TaskSpec(TypedDict):
+    id: str           # description SHA1 앞 8자 — 코드 레벨 중복 태스크 차단 키
+    description: str
+
+class ToolCallRecord(TypedDict):
+    tool_name: str
+    args: dict
+    result_text: str   # MCP 래퍼 제거 후 순수 entity JSON — iter_entities 파싱 가능
+    summary: str       # 예: "3건: 김민준, 이서연"
+    is_error: bool
+
+class TaskExecutionResult(TypedDict):
+    task_id: str
+    task_description: str
+    round: int         # 실행 시점의 iteration_count
+    status: str        # "completed" | "empty" | "error"
+    tool_calls: list[ToolCallRecord]
+    worker_note: str          # 워커 최종 보고 한 줄 — orchestrator 수집 완료 판단용
+    selected_ids: list[str]   # 워커가 태스크와 직접 관련하다고 선별한 엔티티 ID
+    selection_valid: bool     # True+빈 리스트 = '관련 없음' 판정, False = 선별 정보 없음(전문 fallback)
 
 class RDAgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
-    tool_results: dict[str, list[str]]  # {tool_name: [result_str, ...]} — _build_references용
-    iteration_count: int                # 오케스트레이터 호출 횟수
-    pending_tasks: list[str]            # 이번 라운드 실행 태스크 설명 목록
-    executed_tasks: list[str]           # 코드 레벨 dedup용 (실행된 태스크 설명)
-    task_results: list[dict]            # [{round, task, tools:[{name,summary}]}] — UI per-task 표시용
+    pending_tasks: list[TaskSpec]                       # orchestrator → worker
+    task_execution_results: list[TaskExecutionResult]   # 수집 데이터 단일 소스 (현재 턴)
+    iteration_count: int                                # 오케스트레이터 호출 횟수
+    out_of_scope: bool                                  # R&D 무관 질문 판정
 ```
 
 - `typing_extensions.TypedDict` 직접 사용 (pyrefly 호환, `MessagesState` 상속 금지)
@@ -224,49 +255,58 @@ MariaDB `system_config` 테이블 (key VARCHAR, value JSON):
 
 ## 7. 노드 설계
 
-### orchestrator
+### orchestrator (agent/orchestrator/orchestrator_node.py)
 
 ```python
 class OrchestratorPlan(BaseModel):
-    reasoning: str   # 수집 현황 평가 및 전략 (한국어)
-    tasks: list[str] # 병렬 실행 태스크 설명 목록. 수집 완료 시 []
+    reasoning: str      # 수집 현황 평가 및 전략 (한국어 1~2문장)
+    tasks: list[str]    # 병렬 실행할 '자연어' 태스크 지시문 목록. 수집 완료 시 []
+    out_of_scope: bool  # R&D와 전혀 무관한 질문이면 true
 
-async def orchestrator(state, config) -> dict:
+async def orchestrator_node(state, config) -> dict:
     # _build_capabilities(tools_by_name) — 동적 capabilities 주입
-    # with_structured_output(OrchestratorPlan)
+    # apply_compaction() — 히스토리 압축
+    # with_structured_output(OrchestratorPlan), 실패 시 재시도 후 tasks=[] fallback
     # _merge_dependent_tasks(tasks) — 의존 키워드("검색된", "위의" 등) 감지 시 단일 태스크로 병합
-    # 실패 시: tasks=[], meaningful error reasoning 반환
-    return {"messages": [AIMessage(name="orchestrator")], "pending_tasks": tasks, "iteration_count": n}
+    return {"messages": [...], "pending_tasks": [TaskSpec, ...], "iteration_count": n, "out_of_scope": b}
 ```
 
 - 도구 이름·파라미터를 직접 지정하지 않음 — 워커가 자율 결정
-- 대화 히스토리의 `[tool_results]` 메시지를 보고 수집 완료 여부 판단
-- `_merge_dependent_tasks`: 태스크 설명에 이전 결과 참조 키워드가 있으면 병렬 실행 불가 → 앞 태스크에 병합
+- `[수집 결과]` 메시지(라운드 요약)를 보고 수집 완료 여부 판단
+- 수집된 ID를 다음 태스크에 넘길 때는 선별 기준(예: "최유리(R004)가 저술한")을 태스크 설명에 유지
 
-### parallel_executor (Worker Agent)
+### worker (agent/worker/)
 
 ```python
-_WORKER_MAX_STEPS = 5
+WORKER_MAX_STEPS = 10
 
-async def _run_worker(task: str, tools_by_name, settings) -> list[tuple[str, str]]:
+# worker.py — 워커 1개의 ReAct 루프
+async def run_worker(task: TaskSpec, tools_by_name, settings, ...) -> TaskExecutionResult:
     # get_llm().bind_tools(all_tools) + ReAct loop
     # seen_calls 기반 동일 (tool, args) 중복 호출 차단
-    # 도구 호출 → 결과 분석 → 추가 호출 여부 자율 판단
-    return [(tool_name, result_str), ...]
+    # 검색 도구 결과에 auto_join_details로 상세 필드 즉시 조인
+    # 최종 응답: {"summary": "...", "relevant_ids": [...]} JSON → parse_worker_final
 
-async def parallel_executor(state, config) -> dict:
-    # _task_key(task) 기준 중복 태스크 차단 (executed_tasks: list[str])
-    # asyncio.gather(*[_run_worker(t, ...) for t in fresh_tasks])
-    # tool_results[tool_name] += [result_str]
-    # AIMessage(name="tool_results") + task_results 생성
+# worker_node.py — graph의 "worker" 노드
+async def worker_node(state, config) -> dict:
+    # task_id 기준 중복 태스크 차단 → asyncio.gather 병렬 실행
+    # enrich_selected_entities — 선별됐지만 상세 미수집 ID 사후 일괄 보강
+    # 라운드 요약(AIMessage(name="tool_results"))만 messages에 추가
+    return {"messages": [...], "task_execution_results": [...], "pending_tasks": []}
 ```
 
-### generate
+워커 프롬프트 핵심 전략 (WORKER_SYSTEM_PROMPT):
+- 태스크에 ID가 명시되면 `get_entities` 우선 (검색 생략)
+- 관계 검색은 앵커 엔티티 확정 → `run_graph_query` 정확 매칭으로 추적. 대상 타입 직접 시맨틱 검색은 앵커를 못 찾거나 그래프가 빈 결과일 때만
+- 특정 엔티티와의 연결이 요구되면 상세 필드(authors 등)로 직접 연결 검증 (주제 유사 ≠ 관계)
+- 광역 주제 검색은 recall 우선 — 판단 불가 시 ID 포함
+
+### generator (agent/generator/generator_node.py)
 
 ```python
-async def generate(state, config) -> dict:
-    # get_turn_context() 로 멀티턴 경계 분리 (마지막 final_answer 이후 = 현재 턴)
-    # tool_results → HumanMessage 변환 (로컬 LLM Human→AI 교차 구조 보장)
+async def generator_node(state, config) -> dict:
+    # collect_relevant_data(task_execution_results) — 워커 selected_ids 기반 선별 + 전역 dedup
+    # <수집된 데이터> 블록으로 컨텍스트 구성 (references와 동일 규칙 공유)
     # get_llm(streaming=True) — SSE 토큰 스트리밍
     return {"messages": [AIMessage(name="final_answer")]}
 ```
@@ -382,7 +422,7 @@ api_port: int = 8080
 |------|-----------------|------|------|
 | orchestrator | `orchestrator_model` | 14b | 32b |
 | worker | `worker_model` | 14b | 32b |
-| generate | `generate_model` | 7b | 32b+ |
+| generator | `generate_model` | 7b | 32b+ |
 | compaction | `compact_model` | 3b | 7b |
 
 ---
@@ -403,7 +443,7 @@ async def create_memory():
 ### Context Compaction
 
 ```python
-COMPACTION_THRESHOLD = 80_000  # 토큰 초과 시 압축 트리거 (orchestrator, generate)
+COMPACTION_THRESHOLD = 10_000  # 추정 토큰 초과 시 apply_compaction()이 히스토리 압축
 ```
 
 ---
@@ -417,25 +457,26 @@ COMPACTION_THRESHOLD = 80_000  # 토큰 초과 시 압축 트리거 (orchestrato
   reasoning: ...
   tasks: ["논문 조사 ...", "특허 동향 분석 ..."]
 
-[worker:태스크설명앞40자] semantic_search elapsed=0.4s
-  args: {"query": "..."}
-  result: [전체 결과]
+[EXEC] round=1  workers=2
+  dispatch | 태스크설명...
 
-[parallel_executor] 전체 2개 완료 elapsed=0.8s
+[WORKER] "태스크설명앞35자"   step=1  semantic_search  0.4s
+  in  | {"query": "..."}
+  out | 10건: ...(0.80), ...
 
-[generate] state.messages 전체 (7개):
-  [0] name=human ...
-  [1] name=orchestrator ...
-  [2] name=tool_results ...
-[generate] elapsed=3.1s
+[EXEC] 자동 조인  Project 10건  0.01s
+[EXEC] done  45.42s
+  ✓ "태스크설명"  1 calls  completed
+
+[generator] ...
 ```
 
 **노드별 로그 색상:**
 | 노드 | 색상 |
 |------|------|
 | orchestrator | magenta |
-| parallel_executor / worker | yellow |
-| generate | green |
+| worker_node / worker | yellow |
+| generator | green |
 | api | bright white |
 | infrastructure | bright cyan |
 

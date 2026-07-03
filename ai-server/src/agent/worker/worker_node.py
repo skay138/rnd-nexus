@@ -25,7 +25,7 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 
-def _build_history_summary(task_execution_results: list[dict]) -> str:
+def _build_history_summary(task_execution_results: list[TaskExecutionResult]) -> str:
     """이전 라운드 완료 태스크·결과 요약 — 워커 중복 수집 방지용."""
     completed: list[str] = []
     empty_tools: list[str] = []
