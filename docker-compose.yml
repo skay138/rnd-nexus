@@ -71,7 +71,7 @@ services:
     command: >
       bash -c "
       cd /opt/tritonserver/python/openai &&
-      python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B --tool-call-parser qwen3
+      python3 openai_frontend/main.py --model-repository /models --tokenizer Qwen/Qwen3-32B-Instruct-AWQ --tool-call-parser qwen3
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/v1/models"]
