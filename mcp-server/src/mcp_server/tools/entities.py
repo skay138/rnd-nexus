@@ -21,12 +21,12 @@ def register_entity_tools(mcp: FastMCP) -> None:
         """
         <role>
         ID 목록으로 엔티티 상세 정보를 조회합니다.
-        semantic_search, semantic_graph_search, run_graph_query로 수집한 ID의 전체 필드가 필요할 때 사용하세요.
-        이름(name)만 필요한 경우 semantic_search 결과를 그대로 활용하고 이 도구는 생략 가능합니다.
+        태스크에 ID가 이미 명시되어 있거나, 검색·그래프 도구 결과로 ID를 확보했다면 이 도구로 전체 필드를 조회하세요.
+        ID를 알고 있다면 검색 없이 이 도구를 첫 호출로 사용해도 됩니다.
         </role>
 
         <instructions>
-        - semantic_search / semantic_graph_search 결과의 id 필드를 그대로 전달하세요
+        - 검색·그래프 결과의 id 필드를 그대로 전달하세요 — get_researcher_network의 papers/patents 안에 중첩된 id도 조회 대상입니다
         - 여러 타입이 섞여 있으면 entity_type별로 나눠 호출하세요
         - 최대 50개 ID를 한 번에 전달 가능합니다
         </instructions>

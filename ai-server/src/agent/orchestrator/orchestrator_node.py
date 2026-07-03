@@ -37,6 +37,7 @@ _STRATEGY = """
 - If [수집 결과] shows empty results (빈 결과) or a failure report for a search, never plan the same search again — change keywords or scope, or finish with tasks=[].
 - Each task must include the core keywords from the user's question (names, IDs, etc.).
 - If IDs or identifiers have already been collected in previous rounds or from the user, include them directly in the task description.
+- When a task carries collected IDs, ALWAYS keep the original selection criterion in the description so the worker can verify relevance and drop unrelated entities. Write "최유리(R004)가 저술한 논문 P004, P006의 상세를 조회하세요" — never a bare ID list like "논문 P004, P006의 상세를 조회하세요".
 - If a task involves a specific entity, explicitly specify its entity type (e.g., 논문, 과제, 연구자) in the task description based on the conversation context. Example: Write "논문 12345의..." instead of "12345의...".
 - Do not expand into new domains or topics beyond the scope of the original question.
 </instructions>

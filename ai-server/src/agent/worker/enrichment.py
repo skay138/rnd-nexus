@@ -44,6 +44,14 @@ ID_KEY_TO_TYPE = {
     "org_id":        "Organization",
 }
 
+# 그래프 도구 결과 행의 중첩 목록 키 → 엔티티 타입.
+# get_researcher_network의 papers/patents([{id, title}])는 최상위 행이 아니라
+# iter_entities가 순회하지 못하므로, 부모 키로 타입을 추론해 보강 대상에 포함한다.
+NESTED_KEY_TO_TYPE = {
+    "papers":  "Paper",
+    "patents": "Patent",
+}
+
 
 async def auto_join_details(result_text: str, tools_by_name: dict[str, Any]) -> str:
     """검색 결과의 얕은 행(id·name·score)에 상세 필드를 즉시 조인한다.
@@ -137,7 +145,7 @@ def entity_score_map(results: list[dict]) -> dict[str, float]:
 
 
 def entity_type_map(results: list[dict]) -> dict[str, str]:
-    """수집된 엔티티로부터 ID → entity_type 매핑 구성 (node_type 필드 + 도메인 ID 키)."""
+    """수집된 엔티티로부터 ID → entity_type 매핑 구성 (node_type 필드 + 도메인 ID 키 + 중첩 목록)."""
     mapping: dict[str, str] = {}
     for r in results:
         for tc in r.get("tool_calls", []):
@@ -151,6 +159,13 @@ def entity_type_map(results: list[dict]) -> dict[str, str]:
                 for key, etype in ID_KEY_TO_TYPE.items():
                     if e.get(key):
                         mapping.setdefault(str(e[key]), etype)
+                for key, etype in NESTED_KEY_TO_TYPE.items():
+                    items = e.get(key)
+                    if not isinstance(items, list):
+                        continue
+                    for item in items:
+                        if isinstance(item, dict) and item.get("id"):
+                            mapping.setdefault(str(item["id"]), etype)
     return mapping
 
 

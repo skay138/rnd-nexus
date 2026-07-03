@@ -38,7 +38,8 @@ def register_graph_tools(mcp: FastMCP) -> None:
         Returns:
             [{name, researcher_id, papers, patents, organization, technologies}, ...]
             researcher_id 매칭 시 1행, 이름 부분 일치 시 최대 10행 (동명이인 각 1행)
-            papers/patents: [{id, title}] 최대 5건 — id는 get_entities·get_citation_graph에 사용 가능
+            papers/patents: [{id, title}] 최대 5건 — id·title만 포함하므로
+            출판 연도·저자·초록 등 상세가 필요하면 이 id로 get_entities(Paper/Patent)를 호출하세요
             organization: 소속 기관명, technologies: 연구 기술명 목록
             연구자의 h_index·specialty 등 상세 필드는 get_entities(Researcher)로 조회하세요
         """

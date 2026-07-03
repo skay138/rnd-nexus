@@ -58,6 +58,8 @@ def register_vector_graph_tools(mcp: FastMCP) -> None:
         <constraints>
         - query에 엔티티 ID (예: 'P011', 'R002')를 입력하지 마세요.
         - 이미 정확한 엔티티 ID를 알고 있다면, `run_graph_query` 도구를 사용하여 직접 매칭하세요 (예: MATCH (p:Paper {id: 'P011'})<-[:AUTHORED]-(r:Researcher) RETURN ...).
+        - 특정 연구자·과제에 '속한' 논문/특허 목록 조회에는 사용하지 마세요 — 시맨틱 진입은 주제 유사도 기반이라 저자·소속 필터가 불가능합니다.
+          get_researcher_network 또는 run_graph_query로 연결된 ID를 얻은 뒤 get_entities로 상세를 조회하세요.
         </constraints>
 
         Args:
