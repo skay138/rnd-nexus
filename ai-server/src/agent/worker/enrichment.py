@@ -69,15 +69,20 @@ async def auto_join_details(result_text: str, tools_by_name: dict[str, Any]) -> 
 
     details: dict[str, dict] = {}
     for etype, ids in by_type.items():
+        t0 = time.perf_counter()
         try:
             joined_str = clean_tool_result(
                 str(await tool.ainvoke({"entity_type": etype, "ids": ids}))
             )
         except Exception as e:
-            logger.debug("[EXEC] 상세 조인 실패 (%s): %s", etype, e)
+            logger.debug("[EXEC] 자동 조인 실패 (%s): %s", etype, e)
             continue
         if extract_tool_error(joined_str):
             continue
+        
+        elapsed = time.perf_counter() - t0
+        logger.debug("[EXEC] 자동 조인  %s %d건  %.2fs", etype, len(ids), elapsed)
+
         for d in iter_entities(joined_str):
             for i in entity_ids(d):
                 details[i] = d
