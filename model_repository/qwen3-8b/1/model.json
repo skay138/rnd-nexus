@@ -2,8 +2,8 @@
   "model": "Qwen/Qwen3-8B",
   "dtype": "bfloat16",
   "tensor_parallel_size": 1,
-  "gpu_memory_utilization": 0.45,
-  "max_model_len": 32768,
+  "gpu_memory_utilization": 0.30,
+  "max_model_len": 8192,
   "enable_prefix_caching": true,
   "enforce_eager": true
 }

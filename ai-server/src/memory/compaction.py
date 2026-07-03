@@ -4,7 +4,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 
-COMPACTION_THRESHOLD = 24_000  # 추정 토큰 기준
+COMPACTION_THRESHOLD = 20_000  # 추정 토큰 기준
 
 
 def estimate_tokens(messages: list[Any]) -> int:
