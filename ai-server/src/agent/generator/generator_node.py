@@ -29,7 +29,7 @@ def _format_collected_data(task_execution_results: list) -> str:
     return "\n\n".join(blocks)
 
 
-async def generate(state: RDAgentState, config: RunnableConfig) -> dict:
+async def generator_node(state: RDAgentState, config: RunnableConfig) -> dict:
     if state.get("out_of_scope"):
         logger.debug("[generate] out_of_scope — 안내 반환")
         return {"messages": [AIMessage(

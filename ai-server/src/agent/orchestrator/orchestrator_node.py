@@ -93,13 +93,18 @@ def _build_capabilities(tools_by_name: dict[str, Any]) -> str:
     return "<tools>\n" + "\n".join(lines) + "\n</tools>"
 
 
-async def orchestrator(state: RDAgentState, config: RunnableConfig) -> dict:
+async def orchestrator_node(state: RDAgentState, config: RunnableConfig) -> dict:
     settings = get_settings()
     configurable: dict[str, Any] = config.get("configurable", {})
     max_iterations: int = configurable.get("max_iterations", 3)
     tools_by_name: dict[str, Any] = configurable.get("tools_by_name", {})
     iteration_count: int = state.get("iteration_count", 0)
 
+    final_round_note = (
+        "\n- This is the FINAL collection round. Answer generation begins immediately after — plan only what is essential."
+        if iteration_count + 1 >= max_iterations
+        else ""
+    )
     system_prompt = f"""<role>
 You are an R&D data collection orchestrator. Write task descriptions in Korean.
 Collect the data needed to fully answer the user's question, then return tasks=[] when done.
@@ -112,7 +117,7 @@ Each worker reads the task description and autonomously selects the appropriate 
 {_STRATEGY}
 
 <constraints>
-- Current round: {iteration_count + 1} / {max_iterations}{chr(10) + "- This is the FINAL collection round. Answer generation begins immediately after — plan only what is essential." if iteration_count + 1 >= max_iterations else ""}
+- Current round: {iteration_count + 1} / {max_iterations}{final_round_note}
 - Each task description must be specific enough for a worker to execute independently.
 </constraints>
 

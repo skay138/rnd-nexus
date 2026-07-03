@@ -22,6 +22,7 @@ _NEO4J_RELATIONS: dict[str, tuple[str, str]] = {
 }
 
 SCHEMA_HINT = """
+[스키마]
 Neo4j 노드: Paper | Patent | Researcher | Technology | Project | Organization
 
 관계 타입 (run_graph_query Cypher 및 semantic_graph_search hops 모두 동일):
