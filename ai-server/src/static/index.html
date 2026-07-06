@@ -881,6 +881,7 @@
         var n = 0, m;
         while ((m = citeRegex.exec(sourceText)) !== null) {
           if (/^\d+$/.test(m[1])) continue;
+          if (!m[0].startsWith("[#") && /^[A-Za-z]+$/.test(m[1])) continue;
           if (!(m[1] in numMap)) numMap[m[1]] = ++n;
         }
         
@@ -888,6 +889,7 @@
         citeRegex.lastIndex = 0;
         return html.replace(citeRegex, function(match, id) {
           if (/^\d+$/.test(id)) return match;
+          if (!match.startsWith("[#") && /^[A-Za-z]+$/.test(id)) return match;
           if (!numMap[id]) return match;
           var escapedAttr = escHtml(id).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
           return '<sup class="cite" data-query-text="' + escapedAttr + '" onclick="appendQuery(this.dataset.queryText)">[' + numMap[id] + ']</sup>';
@@ -897,6 +899,7 @@
       citeRegex.lastIndex = 0;
       return html.replace(citeRegex, function(match, id) {
         if (/^\d+$/.test(id)) return match;
+        if (!match.startsWith("[#") && /^[A-Za-z]+$/.test(id)) return match;
         var entry = map[id];
         if (!entry) return match;
         var queryText = entry.title ? entry.title : id;
