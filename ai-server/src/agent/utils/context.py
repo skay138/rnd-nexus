@@ -1,7 +1,14 @@
+import datetime
 import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, AIMessage
+
+
+def get_today_message() -> HumanMessage:
+    """오늘 날짜를 담은 HumanMessage를 반환한다."""
+    today = datetime.date.today().strftime("%Y년 %m월 %d일")
+    return HumanMessage(content=f"[오늘 날짜: {today}]")
 
 
 _CITE_RE = re.compile(r'\[#([A-Za-z0-9\-_.]+)\]')

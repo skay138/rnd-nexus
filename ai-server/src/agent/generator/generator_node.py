@@ -7,7 +7,7 @@ from common.llm import get_llm
 from common.parsers import collect_relevant_data, strip_think
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState
-from agent.utils.context import split_turns, previous_turn_context
+from agent.utils.context import split_turns, previous_turn_context, get_today_message
 from config import get_settings
 from memory.compaction import apply_compaction
 
@@ -62,7 +62,7 @@ async def generator_node(state: RDAgentState, config: RunnableConfig) -> dict:
         last_human = HumanMessage(
             content=f"<수집된 데이터>\n{data_block}\n</수집된 데이터>\n\n[질문]\n{last_human.content}"
         )
-    relevant = history + lead + [last_human]
+    relevant = history + lead + [get_today_message(), last_human]
 
     system_prompt = """<role>
 You are an R&D AI assistant. Answer in Korean.

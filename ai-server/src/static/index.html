@@ -811,6 +811,7 @@
     // done 이후엔 서버 references 번호(citeOverride)로 동기화 — 검증 안 된 ID 마커는 제거
     // citeOverride: { id: {num, title, type} }
     var citeOverride = null;
+    var globalCiteCache = {};
     var TYPE_COLORS = {
       Paper: "#60a5fa", Patent: "#fb923c", Researcher: "#4ade80",
       Technology: "#a78bfa", Project: "#facc15", Organization: "#94a3b8"
@@ -1100,16 +1101,56 @@
               } else if (ev.type === "done") {
                 markRoundDone(currentRound);
                 citeOverride = null;
+                
+                // 1. Update global cache
                 if (ev.references && ev.references.length > 0) {
-                  citeOverride = {};
                   ev.references.forEach(function(r) {
-                    citeOverride[r.id] = { num: r.num, title: r.title || "", type: r.type || "" };
+                    globalCiteCache[r.id] = { title: r.title || "", type: r.type || "" };
                   });
                 }
+                var cacheKeys = Object.keys(globalCiteCache);
+                if (cacheKeys.length > 100) {
+                  for (var i = 0; i < cacheKeys.length - 100; i++) {
+                    delete globalCiteCache[cacheKeys[i]];
+                  }
+                }
+
+                // 2. Build final references list starting with ev.references
+                var finalRefs = [];
+                var existingIds = {};
+                if (ev.references) {
+                  ev.references.forEach(function(r) {
+                    finalRefs.push(r);
+                    existingIds[r.id] = true;
+                  });
+                }
+
+                // 3. Extract markers from text and add missing ones from cache
+                var citeRegex = /(?:\[#|\[|\()([A-Za-z0-9\-_.]+)(?:\]|\))/g;
+                var mMatch;
+                while ((mMatch = citeRegex.exec(text)) !== null) {
+                  var cid = mMatch[1];
+                  if (/^\d+$/.test(cid)) continue;
+                  if (!mMatch[0].startsWith("[#") && /^[A-Za-z]+$/.test(cid)) continue;
+                  
+                  if (!existingIds[cid]) {
+                    existingIds[cid] = true;
+                    var cached = globalCiteCache[cid] || { title: "", type: "" };
+                    finalRefs.push({ id: cid, title: cached.title, type: cached.type });
+                  }
+                }
+
+                // 4. Re-assign sequential numbers
+                citeOverride = {};
+                finalRefs.forEach(function(r, index) {
+                  r.num = index + 1;
+                  citeOverride[r.id] = { num: r.num, title: r.title || "", type: r.type || "" };
+                });
+
                 answerBody.innerHTML = renderMarkdown(text) || "(응답 없음)";
-                if (ev.references && ev.references.length > 0) {
+                if (finalRefs.length > 0) {
                   refBlock.style.display = "block";
-                  var refItems = ev.references.map(function(r) {
+                  var refItems = finalRefs.map(function(r) {
                     var title = r.title ? escHtml(r.title.substring(0, 30)) + (r.title.length > 30 ? "…" : "") : "";
                     var label = title ? '"' + title + '" ' : "";
                     var queryText = r.title ? r.title : r.id;

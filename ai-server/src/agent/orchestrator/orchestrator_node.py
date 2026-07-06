@@ -10,7 +10,7 @@ from common.llm import get_llm, llm_ainvoke
 from common.parsers import strip_code_fence
 from common.config.query_config import RequestConfig
 from agent.state import RDAgentState, TaskSpec
-from agent.utils.context import split_turns, previous_turn_context
+from agent.utils.context import split_turns, previous_turn_context, get_today_message
 from config import get_settings
 from memory.compaction import apply_compaction
 
@@ -148,8 +148,7 @@ Examples:
         or getattr(m, "name", None) in ("orchestrator", "tool_results")
     ]
 
-    today = datetime.date.today().strftime("%Y년 %m월 %d일")
-    date_msg = HumanMessage(content=f"[오늘 날짜: {today}]")
+    date_msg = get_today_message()
     invoke_msgs = [SystemMessage(content=system_prompt), date_msg] + relevant_msgs
     # 컨텍스트가 길어질 경우 JSON 출력 지시를 잊지 않도록 마지막에 리마인더 추가
     invoke_msgs.append(HumanMessage(content="Output ONLY valid JSON as specified. No markdown (```json), no explanation — pure JSON only."))

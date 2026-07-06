@@ -9,11 +9,9 @@ import asyncio
 import json
 import logging
 import time
-from datetime import date
 from typing import Any
-
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
-
+from agent.utils.context import get_today_message
 from agent.worker.enrichment import SEARCH_TOOLS, auto_join_details
 from agent.state import TaskExecutionResult, TaskSpec, ToolCallRecord
 from common.config.query_config import RequestConfig
@@ -109,10 +107,9 @@ async def run_worker(
     if history_summary:
         task_content += f"\n\n{history_summary}"
 
-    today = date.today().strftime("%Y년 %m월 %d일")
     messages: list = [
         SystemMessage(content=WORKER_SYSTEM_PROMPT),
-        HumanMessage(content=f"[오늘 날짜: {today}]"),
+        get_today_message(),
         HumanMessage(content=task_content),
     ]
     seen_calls: set[str] = set()
