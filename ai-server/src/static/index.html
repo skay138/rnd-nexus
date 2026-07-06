@@ -882,7 +882,7 @@
         var n = 0, m;
         while ((m = citeRegex.exec(sourceText)) !== null) {
           if (/^\d+$/.test(m[1])) continue;
-          if (!m[0].startsWith("[#") && /^[A-Za-z]+$/.test(m[1])) continue;
+          if (!m[0].startsWith("[#") && !/\d/.test(m[1])) continue;
           if (!(m[1] in numMap)) numMap[m[1]] = ++n;
         }
         
@@ -890,7 +890,7 @@
         citeRegex.lastIndex = 0;
         return html.replace(citeRegex, function(match, id) {
           if (/^\d+$/.test(id)) return match;
-          if (!match.startsWith("[#") && /^[A-Za-z]+$/.test(id)) return match;
+          if (!match.startsWith("[#") && !/\d/.test(id)) return match;
           if (!numMap[id]) return match;
           var escapedAttr = escHtml(id).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
           return '<sup class="cite" data-query-text="' + escapedAttr + '" onclick="appendQuery(this.dataset.queryText)">[' + numMap[id] + ']</sup>';
@@ -900,7 +900,7 @@
       citeRegex.lastIndex = 0;
       return html.replace(citeRegex, function(match, id) {
         if (/^\d+$/.test(id)) return match;
-        if (!match.startsWith("[#") && /^[A-Za-z]+$/.test(id)) return match;
+        if (!match.startsWith("[#") && !/\d/.test(id)) return match;
         var entry = map[id];
         if (!entry) return match;
         var queryText = entry.title ? entry.title : id;
@@ -1102,9 +1102,10 @@
                 markRoundDone(currentRound);
                 citeOverride = null;
                 
-                // 1. Update global cache
-                if (ev.references && ev.references.length > 0) {
-                  ev.references.forEach(function(r) {
+                // 1. Update global cache with full candidate pool
+                var pool = ev.pool || ev.references || [];
+                if (pool.length > 0) {
+                  pool.forEach(function(r) {
                     globalCiteCache[r.id] = { title: r.title || "", type: r.type || "" };
                   });
                 }
@@ -1131,7 +1132,7 @@
                 while ((mMatch = citeRegex.exec(text)) !== null) {
                   var cid = mMatch[1];
                   if (/^\d+$/.test(cid)) continue;
-                  if (!mMatch[0].startsWith("[#") && /^[A-Za-z]+$/.test(cid)) continue;
+                  if (!mMatch[0].startsWith("[#") && !/\d/.test(cid)) continue;
                   
                   if (!existingIds[cid]) {
                     existingIds[cid] = true;

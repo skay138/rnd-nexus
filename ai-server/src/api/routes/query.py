@@ -106,6 +106,22 @@ def _extract_all_refs(obj: Any) -> list[dict]:
                                 "id": parts[0].strip(),
                                 "title": parts[1].strip()
                             })
+            elif k in ("author_ids", "employs_researchers") and isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        refs.append({"type": "Researcher", "id": item.strip(), "title": ""})
+            elif k == "uses_technologies" and isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        refs.append({"type": "Technology", "id": item.strip(), "title": ""})
+            elif k in ("cites", "produced_papers") and isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        refs.append({"type": "Paper", "id": item.strip(), "title": ""})
+            elif k == "produced_patents" and isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        refs.append({"type": "Patent", "id": item.strip(), "title": ""})
             elif isinstance(v, (dict, list)):
                 refs.extend(_extract_all_refs(v))
     elif isinstance(obj, list):
@@ -114,11 +130,10 @@ def _extract_all_refs(obj: Any) -> list[dict]:
                 refs.extend(_extract_all_refs(item))
     return refs
 
-def _build_references(task_execution_results: list, answer_text: str = "") -> list:
-    """출처 목록 생성 — 3단계 우아한 강등."""
+def _build_references(task_execution_results: list, answer_text: str = "") -> tuple[list, list]:
+    """출처 목록 생성 — 3단계 우아한 강등. 반환값: (최종 인용된 candidates, 전체 pool)"""
     from common.parsers import try_parse
-    candidates: list = []
-    seen: set = set()
+    seen: dict = {}
     for block in collect_relevant_data(task_execution_results):
         for item in block["items"]:
             # item may be a list of dicts (entities), or a raw text string
@@ -129,12 +144,21 @@ def _build_references(task_execution_results: list, answer_text: str = "") -> li
                     obj_to_search = parsed
             
             for ref in _extract_all_refs(obj_to_search):
-                if ref["id"] and ref["id"] not in seen:
-                    seen.add(ref["id"])
-                    candidates.append(ref)
+                rid = ref.get("id")
+                if not rid: continue
+                if rid not in seen:
+                    seen[rid] = ref.copy()
+                else:
+                    if not seen[rid].get("title") and ref.get("title"):
+                        seen[rid]["title"] = ref["title"]
+                    if not seen[rid].get("type") and ref.get("type"):
+                        seen[rid]["type"] = ref["type"]
+
+    candidates = list(seen.values())
+    pool = list(seen.values())
 
     if "관련 정보를 찾을 수 없" in answer_text:
-        return []
+        return [], pool
 
     cited: list = []
     marker_ids = list(dict.fromkeys(_CITE_RE.findall(answer_text)))
@@ -148,7 +172,7 @@ def _build_references(task_execution_results: list, answer_text: str = "") -> li
 
     for n, ref in enumerate(candidates, 1):
         ref["num"] = n
-    return candidates
+    return candidates, pool
 
 
 @router.post("/agent/query")
@@ -298,5 +322,5 @@ async def _stream_events(
         logger.warning("[query] 토큰 미수신 — final_answer fallback 전송 (len=%d)", len(last_final_answer))
         yield json.dumps({"type": "token", "content": last_final_answer})
 
-    references = _build_references(last_task_execution_results, last_final_answer)
-    yield json.dumps({"type": "done", "references": references})
+    references, pool = _build_references(last_task_execution_results, last_final_answer)
+    yield json.dumps({"type": "done", "references": references, "pool": pool})
